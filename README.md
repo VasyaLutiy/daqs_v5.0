@@ -11,7 +11,7 @@ We built DAQS for the Gemini hackathon to bridge a gap we kept seeing: rigid scr
 Modern AI NPCs talk well but act poorly. Inspired by GOAP systems (F.E.A.R., S.T.A.L.K.E.R.) and Gemini’s multimodal stack, we asked: what if NPCs spoke with Gemini but thought with a planner? That “two-brain” idea—LLM for style, PDDL for truth—became DAQS.
 
 ### How we built it
-- **Neuro-symbolic core:** We model each session as a PDDL tuple \\(\\Pi = \\langle O, I, G \\rangle\\) where operators \\(O\\) cover moves like `move`, `pickup`, `persuade`, \\(I\\) is the live state (location, inventory, mood), and \\(G\\) encodes quest goals. Plans \\(\\pi = \\langle a_1, a_2, \\dots, a_k \\rangle\\) come from unified_planning/Fast Downward.
+- **Neuro-symbolic core:** We model each session as a PDDL tuple \(\Pi = \langle O, I, G \rangle\) where operators \(O\) cover moves like `move`, `pickup`, `persuade`, \(I\) is the live state (location, inventory, mood), and \(G\) encodes quest goals. Plans \(\pi = \langle a_1, a_2, \dots, a_k \rangle\) come from unified_planning/Fast Downward.
 - **Gemini front-end:** Gemini classifies player intent, renders narrative around validated PDDL actions, and keeps to a Valid Moves list injected into prompts.
 - **Game as Code:** Worlds, items, and personas live in YAML. The engine hot-swaps personas and regenerates graphs instantly.
 - **Client/server split:** FastAPI backend hosts the world and planner; Streamlit UI runs the Game Master front-end.
