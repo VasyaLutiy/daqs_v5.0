@@ -1,0 +1,11 @@
+id: ctx_deep_quest
+type: context
+name: "Security Protocol Challenge"
+description: "The entity narrows its sensors. 'Why should I help a biological unit with no verified clearance? Explain your intentions.'"
+connections:
+  - to: ctx_quest_offer
+    direction: forward
+  - to: ctx_intro
+    direction: backward
+properties:
+  is_start: false

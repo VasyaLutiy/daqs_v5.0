@@ -1,0 +1,20 @@
+(define (problem narrative-journey)
+  (:domain narrative-flow)
+  (:objects
+{% for obj in objects %}
+    {{ obj }}
+{% endfor %}
+  )
+  (:init
+{% for fact in init_facts %}
+    {{ fact }}
+{% endfor %}
+  )
+  (:goal
+    {% if custom_goal %}
+    {{ custom_goal }}
+    {% else %}
+    (visited {{goal_context_id}})
+    {% endif %}
+  )
+)

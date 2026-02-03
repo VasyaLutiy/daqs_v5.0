@@ -1,0 +1,7 @@
+id: action_shift
+text: |
+  ACTION: The Player is SHIFTING the focus to '{target}'.
+  
+  Instructions:
+  1. Describe the transition of the interaction.
+  2. If the new Context has a specific atmosphere defined, transition the mood accordingly.

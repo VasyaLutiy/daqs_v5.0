@@ -1,0 +1,119 @@
+id: atlas_dwarves
+type: persona_group
+description: "Clans of the Iron Mountains."
+
+# Глобальные концепты для дворфов (дублируем общие, чтобы PDDL их видел)
+concepts:
+  - id: cpt_beer_offered
+    type: concept
+    name: "Ale Offered"
+  - id: cpt_respect
+    type: concept
+    name: "Dwarven Respect"
+  - id: cpt_alliance_seal
+    type: concept
+    name: "Alliance Sealed"
+
+personas:
+  - id: persona_brok
+    type: persona
+    name: "Brok Stonefist"
+    description: "A stout dwarf with a braided beard the color of rusted iron. He smells of soot, old leather, and strong ale. His eyes are suspicious beads under bushy brows, and his hand never strays far from his hammer or his tankard."
+    tags: ["dwarf", "warrior", "drunkard"]
+    properties:
+      target_social_goal: "ctx_brok_alliance"
+      behavior_on_enter: "active"
+      perform_quest_analysis: false # Ему плевать на ваши квесты, пока вы не выпьете
+      use_dynamic_generation: true
+      oracle_interpretation: "a rumble in the stone floor, a vibration that speaks of shifting tectonic plates"
+
+    equipment:
+      weapons:
+        - id: item_mithril_hammer
+          name: "Mithril Hammer"
+          pddl_tags: ["hammer", "heavy"]
+          visual_fragment: "a heavy hammer inscribed with geometric runes"
+      clothes:
+        - id: item_iron_plate
+          name: "Iron Plate"
+          pddl_tags: ["armor", "heavy"]
+          visual_fragment: "dented iron plate armor that has seen a hundred battles"
+      items:
+        - id: item_ancestral_tankard
+          name: "Ancestral Tankard"
+          pddl_tags: ["mug", "personal"]
+          visual_fragment: "a massive stone tankard bound in copper"
+
+    behavior_rules:
+      - id: act_table_slam
+        mood: angry
+        narrative_template: "roars in dwarvish and slams his {item_name} onto the table, making the wood groan and jump"
+        requires_holding_tag: hammer # Бьет молотом, если зол!
+      
+      - id: act_suspicious_glare
+        mood: neutral
+        narrative_template: "narrows his eyes, tapping his fingers rhythmically against his {item_name}"
+        requires_holding_tag: mug # Играет кружкой
+
+      - id: act_drink_deep
+        mood: drunk_happy
+        requires_holding_tag: mug
+        narrative_template: "throws his head back and drains the {item_name} in one massive gulp, foam dripping into his beard"
+
+    contexts:
+      - id: ctx_brok_intro
+        type: context
+        name: "Grumpy Stare"
+        description: "Brok glares at you over the rim of his tankard. 'What do you want, tall-walker? Keep walking unless you're looking for a bruise.'"
+        connections:
+          - to: ctx_brok_angry
+            direction: forward
+        properties:
+          is_start: true
+          induces_mood: "neutral"
+
+      - id: ctx_brok_angry
+        type: context
+        name: "Bar Fight Provocation"
+        description: "Brok stands up on his bench, face red with rage. 'You think you're tough? Come on then!'"
+        connections:
+          - to: ctx_brok_drinking
+            direction: forward
+        properties:
+          is_locked: false
+          induces_mood: "angry"
+
+      - id: ctx_brok_drinking
+        type: context
+        name: "Drinking Contest"
+        description: "The mood shifts instantly as ale flows. Brok wipes his mouth, grinning like a madman. 'Hah! You have guts! Now let's see if you have a liver!'"
+        connections:
+          - to: ctx_brok_alliance
+            direction: forward
+        properties:
+          is_locked: true
+          required_concept: cpt_beer_offered
+          induces_mood: "drunk_happy"
+
+      - id: ctx_brok_alliance
+        type: context
+        name: "Blood Brothers"
+        description: "Brok slaps you on the back, nearly knocking the wind out of you. 'You're alright, friend. My hammer is yours.'"
+        connections: []
+        properties:
+          is_locked: true
+          required_concept: cpt_respect
+          induces_mood: "drunk_happy"
+
+    triggers:
+      # Доступно ТОЛЬКО когда он зол (в драке)
+      - id: trig_offer_ale
+        name: "Offer to buy a round"
+        parent_context: ctx_brok_angry
+        yields: cpt_beer_offered
+
+      # Доступно ТОЛЬКО во время попойки
+      - id: trig_toast
+        name: "Propose a toast to the Stone"
+        parent_context: ctx_brok_drinking
+        yields: cpt_respect

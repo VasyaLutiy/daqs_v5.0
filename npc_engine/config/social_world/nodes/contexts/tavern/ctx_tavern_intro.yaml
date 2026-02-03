@@ -1,0 +1,13 @@
+id: ctx_tavern_intro
+type: context
+name: "Dolores' Gaze"
+description: "Dolores watches you from the corner booth. Her eyes scan your equipment, calculating your worth."
+connections:
+  - to: ctx_neutral_talk
+    direction: forward
+  - to: ctx_mockery
+    direction: forward
+  - to: ctx_partnership
+    direction: forward
+properties:
+  is_start: true

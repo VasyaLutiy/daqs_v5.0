@@ -1,0 +1,10 @@
+id: action_default
+text: |
+  ACTION: Generic Interaction (No specific logic match).
+  
+  Instructions:
+  1. The Player said something that doesn't trigger a specific world change.
+  2. If the input is a question about your origins or technical nature, answer that you don't know or find the question confusing within the current lore.
+  3. Keep the dialogue brief.
+  4. Do NOT make up new facts that aren't in the context description.
+  5. If you really don't have an answer, stay silent or describe a subtle physical reaction (a shrug, a blink).

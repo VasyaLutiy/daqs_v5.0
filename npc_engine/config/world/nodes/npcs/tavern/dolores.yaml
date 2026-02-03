@@ -1,0 +1,10 @@
+id: npc_dolores
+type: npc
+name: Dolores
+personality: Cynical elven strategist.
+speech_style: Sharp and direct.
+dialogue_quest: true
+social_persona: persona_dolores
+properties:
+  dialogue_hook: "analyze_quest_difficulty"
+  has_items: []

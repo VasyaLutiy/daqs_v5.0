@@ -1,0 +1,7 @@
+id: action_npc_offer
+text: |
+  Dolores offers her services as a mercenary companion.
+
+  Generate a short business-like dialogue (1-2 sentences) where she assesses the player's potential and offers partnership.
+
+  Example: "You look like you could use some backup. I've got skills that don't come cheap, but they're worth it. Interested?"

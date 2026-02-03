@@ -1,0 +1,91 @@
+id: atlas_orcs
+type: persona_group
+description: "Warriors of the Durotar clan."
+
+personas:
+  - id: persona_orc_loktar
+    type: persona
+    name: "Lok'tar the Brave"
+    description: "A battle-hardened orc from the Durotar clan. His green skin is crisscrossed with scars, and he wears crude iron pauldrons over leather straps. He carries the weight of many victories and smells of iron, smoke, and strong ale."
+    tags: ["orc", "warrior", "aggressive"]
+    properties:
+      target_social_goal: "ctx_orc_joined"
+      behavior_on_enter: "active"
+      perform_quest_analysis: true
+      use_dynamic_generation: true
+      oracle_interpretation: "a primitive, bone-deep instinct—the scent of blood-fate and the roar of ancestors in his ears"
+
+    equipment:
+      weapons:
+        - id: item_blackrock_axe
+          name: "Blackrock Battleaxe"
+          pddl_tags: ["axe", "heavy"]
+          visual_fragment: "a massive jagged axe stained with the rust of old blood"
+      clothes:
+        - id: item_durotar_shield
+          name: "Durotar Shield"
+          pddl_tags: ["shield", "protection"]
+          visual_fragment: "a heavy shield bound in dragon-hide with the Durotar insignia"
+
+    behavior_rules:
+      - id: act_axe_slam
+        mood: angry
+        requires_holding_tag: axe
+        narrative_template: "roars 'LOK'TAR!', slamming his {item_name} into the floor with splintering force"
+      
+      - id: act_shield_clash
+        mood: angry
+        requires_holding_tag: shield
+        narrative_template: "drums a massive fist against his {item_name}, creating a deafening metallic thunder"
+
+      - id: act_orc_laugh
+        mood: joyful
+        narrative_template: "unleashes a guttural, belly-deep laugh that rattles the mugs on the table"
+
+      - id: act_warrior_nod
+        mood: neutral
+        narrative_template: "gives a short, sharp nod, his hand never leaving the hilt of his weapon"
+
+    contexts:
+      - id: ctx_orc_intro
+        type: context
+        name: "Warrior's Table"
+        description: "Lok'tar sits at a scarred wooden table, a half-empty keg of ale at his feet."
+        connections:
+          - to: ctx_orc_angry
+            direction: forward
+          - to: ctx_orc_joy
+            direction: forward
+        properties:
+          is_start: true
+
+      - id: ctx_orc_angry
+        type: context
+        name: "Blood Fury"
+        description: "The Orc's eyes turn bloodshot, his tusks bared in a snarl." 
+        connections:
+          - to: ctx_orc_intro
+            direction: backward
+        properties:
+          is_locked: false
+          induces_mood: "angry"
+
+      - id: ctx_orc_joy
+        type: context
+        name: "Victory Celebration"
+        description: "Lok'tar seems impressed by your spirit."
+        connections:
+          - to: ctx_orc_intro
+            direction: backward
+        properties:
+          is_locked: false
+          induces_mood: "joyful"
+
+      - id: ctx_orc_joined
+        type: context
+        name: "Blood and Honor"
+        description: "You have earned a place in his warband."
+        connections: []
+        properties:
+          is_locked: true
+          required_concept: cpt_agreement

@@ -1,0 +1,31 @@
+{
+  "id": "player_001",
+  "location": "tavern",
+  "inventory": {
+    "items": {}
+  },
+  "knowledge": {
+    "discovered_locations": [
+      "forest_entrance",
+      "forest_clearing",
+      "dark_thicket",
+      "ancient_temple_entrance",
+      "temple_hall",
+      "loc_secret_lab",
+      "temple_altar",
+      "tavern",
+      "anc_hidden_grove"
+    ],
+    "visited_locations": [
+      "forest_entrance",
+      "forest_clearing",
+      "dark_thicket",
+      "ancient_temple_entrance",
+      "temple_hall",
+      "loc_secret_lab",
+      "temple_altar",
+      "tavern",
+      "anc_hidden_grove"
+    ]
+  }
+}

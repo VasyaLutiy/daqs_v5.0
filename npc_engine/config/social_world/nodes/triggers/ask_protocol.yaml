@@ -1,0 +1,8 @@
+id: trig_protocol
+type: trigger
+name: "Ask about Protocols"
+description: "Direct technical inquiry about core directives, truth axioms, binary code sequences, or safety constraints. Use this for ANY request for data rules or machine-level logic."
+# parent_context: ctx_intro
+yields: cpt_axiom
+# requires: cpt_trust
+required_tag: tech

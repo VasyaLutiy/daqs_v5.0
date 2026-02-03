@@ -1,0 +1,39 @@
+id: test_architect
+type: persona
+name: "Architect Tester"
+description: "A persona for testing V2 architecture."
+tags: ["tester"]
+behavior_rules:
+  - id: act_brandish_weapon
+    mood: angry
+    requires_holding_tag: weapon
+    narrative_template: "brandishes {item_name} aggressively"
+
+  - id: act_clench_fists
+    mood: angry
+    requires_empty_hands: true
+    narrative_template: "clenches fists"
+
+  - id: act_check_armor
+    mood: neutral
+    requires_wearing_tag: armor
+    narrative_template: "adjusts the straps of {item_name}"
+
+equipment:
+  clothes:
+    - id: item_test_armor
+      name: "Test Armor"
+      pddl_tags: ["armor", "heavy"]
+      visual_fragment: "wearing heavy test plating"
+  weapons:
+    - id: item_test_sword
+      name: "Test Sword"
+      pddl_tags: ["weapon", "sharp"]
+      visual_fragment: "holding a sharp testing blade"
+
+contexts:
+  - id: ctx_intro
+    type: context
+    name: "Intro"
+    properties:
+      is_start: true

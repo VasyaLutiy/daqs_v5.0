@@ -1,0 +1,152 @@
+id: paladin_realm
+type: region
+name: Paladin Realm
+description: A mystical realm guarded by the spirit of Paladin Aeorha, accessible
+  through the bridge crossing.
+locations:
+- id: paladin_hall
+  type: location
+  name: Paladin Hall
+  description: The grand hall of the Paladin Realm, filled with echoes of ancient
+    battles.
+  region: paladin_realm
+  connections:
+  - to: connecting_bridge
+    edge_type: path
+  - to: connecting_hall
+    edge_type: path
+  contained_items: []
+  contained_npcs: []
+  contained_objects: []
+  contains:
+    npcs:
+    - id: spirit_of_blade
+      type: npc
+      name: Spirit of Blade
+      description: A magical spirit bound to the mighty blade.
+      personality: The spirit manifests as a swirling vortex of steel and magic, ready
+        to strike.
+      properties:
+        has_items: []
+        respawn:
+          enabled: true
+          delay_seconds: 600
+          per_player: true
+    - id: golem_of_hall
+      type: npc
+      name: Golem of Hall
+      description: A stone golem patrolling the paladin hall.
+      personality: A massive construct of stone, moving with deliberate, earth-shaking
+        steps, its eyes glowing with inner fire.
+      properties:
+        has_items: []
+        respawn:
+          enabled: true
+          delay_seconds: 300
+          per_player: true
+    items:
+    - id: mighty_blade
+      type: item
+      name: Mighty Blade
+      description: A powerful sword imbued with ancient magic.
+- id: connecting_hall
+  type: location
+  name: Connecting Hall
+  description: A connecting corridor leading to the inner chamber.
+  region: paladin_realm
+  connections:
+  - to: paladin_hall
+    edge_type: path
+  - to: paladin_chamber
+    edge_type: path
+  contained_items: []
+  contained_npcs: []
+  contained_objects: []
+- id: paladin_chamber
+  type: location
+  name: Paladin Chamber
+  description: The sacred chamber where the spirit of Paladin Aeorha resides.
+  region: paladin_realm
+  connections:
+  - to: connecting_hall
+    edge_type: path
+  contained_items: []
+  contained_npcs: []
+  contained_objects: []
+  contains:
+    npcs:
+    - id: spirit_of_paladin_aeorha
+      type: npc
+      name: Spirit of Paladin Aeorha
+      description: The ancient spirit of Paladin Aeorha, guardian of the portal crystal.
+      personality: A noble figure in spectral armor, radiating wisdom and power, speaking
+        in a voice that echoes through time.
+      properties:
+        has_items: []
+        respawn:
+          enabled: false
+          delay_seconds: 0
+          per_player: false
+    - id: golem_of_chamber
+      type: npc
+      name: Golem of Chamber
+      description: A stone golem guarding the paladin chamber.
+      personality: An imposing stone guardian, carved with runes of protection, standing
+        eternally vigilant.
+      properties:
+        has_items: []
+        respawn:
+          enabled: true
+          delay_seconds: 300
+          per_player: true
+    items:
+    - id: portal_crystal
+      type: item
+      name: Portal Crystal
+      description: The main crystal that powers the portal and holds the spirit of
+        Paladin Aeorha.
+- id: connecting_bridge
+  type: location
+  name: Connecting Bridge
+  description: A narrow bridge connecting the entrance to the main hall.
+  region: paladin_realm
+  connections:
+  - to: paladin_entrance
+    edge_type: path
+  - to: paladin_hall
+    edge_type: path
+  contained_items: []
+  contained_npcs: []
+  contained_objects: []
+- id: paladin_entrance
+  type: location
+  name: Paladin Entrance
+  description: The entrance to the Paladin Realm, a gateway guarded by ancient magic.
+  region: paladin_realm
+  connections:
+  - to: bridge_crossing
+    edge_type: leads_to
+  - to: connecting_bridge
+    edge_type: path
+  contained_items: []
+  contained_npcs: []
+  contained_objects: []
+  contains:
+    npcs:
+    - id: spirit_of_rune
+      type: npc
+      name: Spirit of Rune
+      description: A magical spirit guarding the portal rune.
+      personality: The spirit whispers ancient incantations, its form shimmering with
+        ethereal light.
+      properties:
+        has_items: []
+        respawn:
+          enabled: true
+          delay_seconds: 600
+          per_player: true
+    items:
+    - id: portal_rune
+      type: item
+      name: Portal Rune
+      description: A magical rune that controls portal access.

@@ -1,0 +1,102 @@
+# World actions configuration
+# Defines available actions in the game world
+
+actions:
+  move:
+    description: "Move between locations"
+    parameters:
+      - name: from_location
+        type: location
+        required: true
+      - name: to_location
+        type: location
+        required: true
+    preconditions:
+      - "accessible(to_location)"
+      - "at(player, from_location)"
+    effects:
+      - "at(player, to_location)"
+      - "not at(player, from_location)"
+
+  pickup:
+    description: "Pick up an item"
+    parameters:
+      - name: item
+        type: item
+        required: true
+      - name: location
+        type: location
+        required: true
+    preconditions:
+      - "at(player, location)"
+      - "at(item, location)"
+      - "pickable(item)"
+    effects:
+      - "has_item(player, item)"
+      - "not at(item, location)"
+
+  examine:
+    description: "Examine an object"
+    parameters:
+      - name: object
+        type: object
+        required: true
+      - name: location
+        type: location
+        required: true
+    preconditions:
+      - "at(player, location)"
+      - "at(object, location)"
+    effects:
+      - "examined(object)"
+
+  use_item:
+    description: "Use an item on target"
+    parameters:
+      - name: item
+        type: item
+        required: true
+      - name: target
+        type: object
+        required: true
+    preconditions:
+      - "has_item(player, item)"
+      - "at(player, location)"
+      - "at(target, location)"
+    effects:
+      - "used(item, target)"
+
+  defeat:
+    description: "Defeat an enemy"
+    parameters:
+      - name: enemy
+        type: npc
+        required: true
+      - name: location
+        type: location
+        required: true
+    preconditions:
+      - "at(player, location)"
+      - "at(enemy, location)"
+      - "hostile(enemy)"
+      - "has_ability(player, combat)"
+    effects:
+      - "defeated(enemy)"
+      - "not at(enemy, location)"
+
+  avoid:
+    description: "Avoid an enemy"
+    parameters:
+      - name: enemy
+        type: npc
+        required: true
+      - name: location
+        type: location
+        required: true
+    preconditions:
+      - "at(player, location)"
+      - "at(enemy, location)"
+      - "hostile(enemy)"
+      - "has_ability(player, stealth)"
+    effects:
+      - "avoided(enemy)"

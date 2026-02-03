@@ -1,0 +1,55 @@
+id: region_epic_quest
+type: region
+name: "The Forgotten Lands"
+description: "A land of myths and logical gates."
+
+locations:
+  - id: loc_fort
+    name: "The Forest Fort"
+    description: "A small outpost on the edge of the wild."
+    connections:
+      - to: loc_peak
+        edge_type: path
+        bidirectional: true
+    contains:
+      items:
+        - id: cpt_heat_potion # The first key
+          name: "Fire Resistance Elixir"
+          type: item
+      npcs:
+        - id: npc_blacksmith
+          name: "Old Blacksmith"
+          description: "He watches the gate."
+          dialogue_quest: false
+
+  - id: loc_peak
+    name: "Volcano Peak"
+    description: "It's boiling hot here."
+    connections:
+      - to: loc_bridge
+        edge_type: path
+        bidirectional: true
+    properties:
+      is_locked: true
+      required_concept: cpt_heat_potion
+    contains:
+      items:
+        - id: cpt_feather # The second key
+          name: "Phoenix Feather"
+          type: item
+
+  - id: loc_bridge
+    name: "The Dragon Bridge"
+    description: "A massive stone bridge."
+    connections:
+      - to: loc_citadel
+        edge_type: door
+        bidirectional: true
+    properties:
+      is_locked: true
+      required_concept: cpt_feather
+    
+  - id: loc_citadel
+    name: "The Citadel"
+    description: "The ultimate goal."
+    connections: []

@@ -1,0 +1,10 @@
+id: ctx_deep
+type: context
+name: "Deep Conversation"
+description: "Discussing personal matters and secrets."
+connections:
+  - to: ctx_core
+  - to: ctx_intro
+properties:
+  is_locked: true
+  required_concept: cpt_trust

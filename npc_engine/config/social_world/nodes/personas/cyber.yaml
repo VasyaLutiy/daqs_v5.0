@@ -1,0 +1,88 @@
+id: atlas_cyber
+type: persona_group
+description: "Constructs and AI entities."
+
+personas:
+  - id: persona_cyber
+    type: persona
+    name: "Unit 734 (Masha)"
+    description: "A malfunctioning cybernetic construct obsessed with logic puzzles and corrupted data."
+    properties:
+      target_social_goal: "ctx_core"
+    world_overrides:
+      ctx_intro:
+        is_start: true
+    
+    # --- NESTED WORLD DEFINITION ---
+    contexts:
+      - id: ctx_intro
+        type: context
+        name: "System Boot"
+        description: "The unit boots up. Blue LEDs flicker. 'Input received. Analysis initiated.'"
+        connections:
+          - to: ctx_deep
+            direction: forward
+          - to: ctx_quest_offer
+            direction: forward
+        properties:
+          is_start: true
+
+      - id: ctx_deep
+        type: context
+        name: "Logic Loop"
+        description: "The unit enters a recursive processing state. 'I perceive... inconsistencies in the reality matrix.'"
+        connections:
+          - to: ctx_core
+            direction: forward
+        properties:
+          is_locked: true
+          required_concept: cpt_trust
+
+      - id: ctx_core
+        type: context
+        name: "System Core (CRITICAL ERROR)"
+        description: "Critical failure. Reality fractures."
+        connections: []
+        properties:
+          is_locked: true
+          unlock_actions:
+            - action: "deploy-paradox"
+              requires: [cpt_axiom, cpt_paradox]
+
+      - id: ctx_quest_offer
+        type: context
+        name: "Task Distribution"
+        description: "Standard protocol. 'Here are the available tasks.'"
+        connections:
+          - to: ctx_intro
+            direction: backward
+
+    concepts:
+      - id: cpt_trust
+        type: concept
+        name: "Trust"
+      - id: cpt_axiom
+        type: concept
+        name: "Axiom"
+      - id: cpt_paradox
+        type: concept
+        name: "Paradox"
+
+    triggers:
+      - id: trig_compliment
+        type: trigger
+        name: "Compliment Efficiency"
+        parent_context: ctx_intro
+        yields: cpt_trust
+      
+      - id: trig_logic
+        type: trigger
+        name: "Discuss Logic"
+        parent_context: ctx_deep
+        yields: cpt_paradox
+
+      - id: trig_protocol
+        type: trigger
+        name: "Ask Protocol"
+        parent_context: ctx_intro
+        yields: cpt_axiom

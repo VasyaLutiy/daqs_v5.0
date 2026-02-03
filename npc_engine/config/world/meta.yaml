@@ -1,0 +1,13 @@
+world_id: enchanted_world
+name: "Enchanted World"
+description: "A world full of magic, mysteries, and dangers"
+start_location: "forest_entrance"
+quest_chains:
+  main_quest:
+    name: "Destruction of the Dark Crystal"
+    steps: [...]
+abilities:
+  stealth:
+    name: "Stealth"
+  magic:
+    name: "Magic"

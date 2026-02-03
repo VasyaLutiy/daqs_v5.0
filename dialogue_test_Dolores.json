@@ -1,0 +1,86 @@
+[
+  {
+    "archetype": "The Professional",
+    "outcome": "Success",
+    "transcript": [
+      {
+        "user_input": "Quiet night. Mind if I sit?",
+        "action": "apply-concept player ctx_tavern_intro ctx_neutral_talk cpt_quest_none",
+        "thought": "Customer acknowledging the obvious. Might buy a drink if I play nice enough—profit over chit-chat.",
+        "response": "Quiet night.<br>Good for drinking, bad for business.<br>Sit if you want—first one's on you."
+      },
+      {
+        "user_input": "I hear whispers of a job that doesn't exist.",
+        "action": "activate-trigger player ctx_neutral_talk trig_listen_rumors cpt_shadow_rumor",
+        "thought": "The code phrase. This one's tapped into the Whispers in the Dark network—shadow jobs for those with guts and no questions. Quiet night just got profitable; let's see if they're worth the risk.",
+        "response": "Whispers lie, but not always.<br>That 'job that doesn't exist'?<br>It breathes in the shadows—hits too dirty for daylight coin.<br>You got the spine for it, or just ears?"
+      },
+      {
+        "user_input": "I have the Black Iron to pay for silence.",
+        "action": "activate-trigger player ctx_neutral_talk trig_find_coin cpt_shadow_token",
+        "thought": "Black Iron Coin? That's no ordinary trinket—it's the key to the shadows, a bribe from the underbelly syndicates. This fool thinks it buys mere silence? It opens doors, and with it comes profit... or peril. I'll play along, see what skill this one has.",
+        "response": "Black Iron, eh?<br>That ain't for tavern tongues.<br>Silence is yours...<br>and more, if you've the spine for it.<br>Speak your need, shadow-walker."
+      },
+      {
+        "user_input": "The pieces are in place. Let's step into the shadows.",
+        "action": "apply-combo-concept player ctx_neutral_talk ctx_shadow_entry cpt_shadow_rumor cpt_shadow_token",
+        "thought": "This fool speaks in riddles like every wide-eyed dreamer before them. Pieces in place? Show me coin or skill first, then we'll talk shadows.",
+        "response": "Shadows, eh?<br>Bold words.<br>What's your game, and what's my cut?"
+      }
+    ]
+  },
+  {
+    "archetype": "The Wanderer",
+    "outcome": "Stuck/Left",
+    "transcript": [
+      {
+        "user_input": "Good evening. The ale is terrible tonight.",
+        "action": "apply-concept player ctx_tavern_intro ctx_neutral_talk cpt_quest_none",
+        "thought": "Customer gripes about the ale? As if that's news. Quiet nights like this, complaints are the only business.",
+        "response": "Evenin'.<br>Ale's always terrible here.<br>Quiet night.<br>Good for drinking, bad for business."
+      },
+      {
+        "user_input": "Do you come here often? I'm new to the city.",
+        "action": null,
+        "thought": "Fresh face, probably loaded with naive questions. Might squeeze some info or coin out of them, but don't waste breath on sob stories.",
+        "response": "Often enough to spot trouble like you.<br>New to the city?<br>Keep your wits sharp; not everyone's as welcoming as me."
+      },
+      {
+        "user_input": "I heard there are elves in the woods. Is that true?",
+        "action": null,
+        "thought": "Elves in the woods? Sounds like tavern tales for fools. This one's fishing for stories, maybe trouble. Play it cool, see what profit's in it.",
+        "response": "Elves in the woods?<br>Aye, some lurk there.<br>What's it to you, stranger?"
+      },
+      {
+        "user_input": "You're not very talkative. I'll leave you be.",
+        "action": "shift-context player ctx_neutral_talk ctx_tavern_intro",
+        "thought": "This fool mistakes silence for timidity. No profit in wasting words on the spineless, but a jab might amuse me before he scurries off.",
+        "response": "Not talkative?<br>Good.<br>Saves me the trouble of your drivel.<br>Run along."
+      }
+    ]
+  },
+  {
+    "archetype": "The Brute",
+    "outcome": "Failure",
+    "transcript": [
+      {
+        "user_input": "You. Elf. Talk.",
+        "action": "apply-concept player ctx_tavern_intro ctx_neutral_talk cpt_quest_none",
+        "thought": "This brute thinks he can order me around like a servant. Pathetic. I'll play along, see if there's coin in it.",
+        "response": "What about, meathead?<br>Speak your piece."
+      },
+      {
+        "user_input": "Tell me the secret or I'll break your arm.",
+        "action": null,
+        "thought": "This idiot thinks a threat scares a battle-hardened elf? No secret here, just a fool begging for trouble.",
+        "response": "Secret?<br>What secret, fool?<br>Break my arm and you'll join the gutter rats outside."
+      },
+      {
+        "user_input": "Useless wench.",
+        "action": null,
+        "thought": "This fool mistakes me for some tavern drudge. A sharp word will remind him of my edge—profit over pride.",
+        "response": "Useless?<br>Keep talking, and you'll find out how 'useless' I can be with a blade."
+      }
+    ]
+  }
+]

@@ -1,0 +1,62 @@
+# Dialogue actions configuration
+# Defines dialogue interaction patterns
+
+dialogue_actions:
+  greet:
+    description: "Greet the player"
+    triggers:
+      - "hello"
+      - "hi"
+      - "greetings"
+    responses:
+      - "Hello, adventurer!"
+      - "Greetings, traveler!"
+      - "Well met!"
+
+  quest_info:
+    description: "Provide quest information"
+    triggers:
+      - "quest"
+      - "mission"
+      - "help"
+      - "what should I do"
+    responses:
+      - "I have a task for you..."
+      - "There's something you need to know..."
+
+  location_hint:
+    description: "Give hint about location"
+    triggers:
+      - "where"
+      - "find"
+      - "look for"
+    responses:
+      - "You should check..."
+      - "Look in..."
+
+  goodbye:
+    description: "End conversation"
+    triggers:
+      - "bye"
+      - "farewell"
+      - "see you"
+    responses:
+      - "Safe travels!"
+      - "Until next time!"
+      - "Farewell!"
+
+personality_modifiers:
+  helpful:
+    friendliness: 0.8
+    informativeness: 0.9
+    verbosity: 0.7
+
+  mysterious:
+    friendliness: 0.5
+    informativeness: 0.4
+    verbosity: 0.6
+
+  hostile:
+    friendliness: 0.2
+    informativeness: 0.3
+    verbosity: 0.8

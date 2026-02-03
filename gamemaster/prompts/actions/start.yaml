@@ -1,0 +1,10 @@
+id: action_start
+text: |
+  ACTION: Initial Sequence / Entry into the World.
+  
+  Instructions:
+  1. This is the very beginning of the interaction. 
+  2. Describe the surroundings and the NPC as the Player first encounters them.
+  3. The NPC should offer an initial greeting or a signal of their presence.
+  4. Establish the mood immediately based on the Current Context.
+  5. The Player has not spoken yet; you are setting the stage.

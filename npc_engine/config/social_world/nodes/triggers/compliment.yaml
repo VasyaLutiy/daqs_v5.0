@@ -1,0 +1,6 @@
+id: trig_compliment
+type: trigger
+name: "Make a Compliment"
+description: "Saying something nice to break the ice."
+parent_context: ctx_intro
+yields: cpt_trust

@@ -1,0 +1,7 @@
+id: trig_logic
+type: trigger
+name: "Discuss Logic Loops"
+description: "Bringing up philosophical contradictions."
+parent_context: ctx_deep
+yields: cpt_paradox
+requires: cpt_axiom

@@ -1,0 +1,154 @@
+(define (domain social-unified-v4)
+  (:requirements :strips :typing :negative-preconditions :adl)
+
+  (:types
+    agent       ; Игроки и NPC
+    context     ; Узлы диалога
+    concept     ; Знания и факты
+    trigger     ; Специальные действия в контексте
+    item        ; Физические предметы
+    mood        ; Эмоциональные состояния
+    tag         ; Теги предметов (blade, armor, etc.)
+    action-id   ; ID для визуальных событий
+    secret      ; Высокоуровневые цели диалога
+  )
+
+  (:constants
+    {%- if constants %}
+      {%- for act in constants.actions %}
+    id_{{ act }} - action-id
+      {%- endfor %}
+      {%- for tag in constants.tags %}
+    {{ tag }} - tag
+      {%- endfor %}
+      {%- for mood in constants.moods %}
+    {{ mood }} - mood
+      {%- endfor %}
+    {%- endif %}
+  )
+
+  (:predicates
+    ; --- Навигация и Пространство (v2) ---
+    (active-context ?a - agent ?c - context)  
+    (connected ?from - context ?to - context) 
+    (locked ?c - context)                     
+    (visited ?c - context)
+    (has-item ?a - agent ?i - item)                 
+    
+    ; --- Знания и Триггеры ---
+    (has-concept ?a - agent ?c - concept)     
+    (provides-concept ?c - context ?conc - concept)   
+    (trigger-yields ?t - trigger ?conc - concept)     
+    (in-context ?t - trigger ?c - context)            
+    (exhausted ?t - trigger)
+
+    ; --- Условия разблокировки ---
+    (requires-concept ?target - context ?req - concept) 
+    (requires-combo ?target - context ?c1 - concept ?c2 - concept)
+
+    ; --- Личность и Отношения (v4) ---
+    (is-hostile ?npc - agent)                  
+    (trusts ?npc - agent ?player - agent)      
+    (secret-revealed ?s - secret)              
+    (requires-item ?s - secret ?i - item)      
+
+    ; --- Экипировка и Состояние (V2 Dynamic) ---
+    (current-mood ?a - agent ?m - mood)
+    (wearing ?a - agent ?i - item)
+    (holding ?a - agent ?i - item)
+    (has-tag ?i - item ?t - tag)
+    (is-tag ?t1 - tag ?t2 - tag)
+    (visual-event-triggered ?action_id - action-id)
+  )
+
+  ; --- СОЦИАЛЬНЫЕ ДЕЙСТВИЯ ---
+
+  ; Переход между темами (Блокируется враждебностью)
+  (:action shift-context
+    :parameters (?a - agent ?from - context ?to - context)
+    :precondition (and 
+        (active-context ?a ?from) 
+        (connected ?from ?to) 
+        (not (locked ?to))
+        (not (is-hostile ?a)) ; NPC не пойдет дальше, если враждебен
+    )
+    :effect (and 
+        (not (active-context ?a ?from)) 
+        (active-context ?a ?to) 
+        (visited ?to)
+    )
+  )
+
+  ; Активация триггера
+  (:action activate-trigger
+    :parameters (?a - agent ?ctx - context ?trig - trigger ?conc - concept)
+    :precondition (and 
+        (active-context ?a ?ctx) 
+        (in-context ?trig ?ctx) 
+        (trigger-yields ?trig ?conc) 
+        (not (exhausted ?trig))
+        (not (is-hostile ?a))
+    )
+    :effect (and (exhausted ?trig) (has-concept ?a ?conc))
+  )
+
+  ; Раскрытие секрета (Enterprise Цель)
+  (:action reveal-secret
+    :parameters (?npc - agent ?player - agent ?s - secret ?i - item ?ctx - context)
+    :precondition (and 
+        (active-context ?npc ?ctx)
+        (not (is-hostile ?npc))
+        (has-item ?player ?i)
+        (requires-item ?s ?i)
+    )
+    :effect (and (secret-revealed ?s))
+  )
+
+  ; Пересечение красной линии (Обида)
+  (:action cross-red-line
+    :parameters (?npc - agent ?player - agent)
+    :precondition (not (is-hostile ?npc))
+    :effect (and (is-hostile ?npc))
+  )
+
+  ; Разблокировка контекста (Ключ)
+  (:action apply-concept
+    :parameters (?a - agent ?current - context ?target - context ?key - concept)
+    :precondition (and 
+        (active-context ?a ?current) 
+        (connected ?current ?target) 
+        (locked ?target) 
+        (requires-concept ?target ?key) 
+        (has-concept ?a ?key)
+    )
+    :effect (and (not (locked ?target)))
+  )
+
+  ; --- ДИНАМИЧЕСКОЕ ПОВЕДЕНИЕ (Генерируется из Persona YAML) ---
+  {%- if persona is defined and persona.behavior_rules is defined %}
+  {%- for rule in persona.behavior_rules %}
+  (:action do_{{ rule.id }}
+      :parameters (?a - agent 
+                   {%- if rule.requires_holding_tag %} ?item_h - item ?tag_h - tag {%- endif %}
+                   {%- if rule.requires_wearing_tag %} ?item_w - item ?tag_w - tag {%- endif %}
+      )
+      :precondition (and 
+          (current-mood ?a {{ rule.mood }})
+          {%- if rule.requires_holding_tag %}
+          (holding ?a ?item_h)
+          (has-tag ?item_h ?tag_h)
+          (is-tag ?tag_h {{ rule.requires_holding_tag }})
+          {%- endif %}
+          {%- if rule.requires_wearing_tag %}
+          (wearing ?a ?item_w)
+          (has-tag ?item_w ?tag_w)
+          (is-tag ?tag_w {{ rule.requires_wearing_tag }})
+          {%- endif %}
+      )
+      :effect (and 
+          (visual-event-triggered id_{{ rule.id }})
+      )
+  )
+  {%- endfor %}
+  {%- endif %}
+)

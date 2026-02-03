@@ -1,0 +1,108 @@
+id: ancient_temple
+type: region
+name: Ancient Temple
+description: An ancient temple complex.
+locations:
+- id: ancient_temple_entrance
+  type: location
+  name: Ancient Temple Entrance
+  description: The entrance to an ancient temple.
+  region: ancient_temple
+  connections:
+  - to: dark_thicket
+    edge_type: path
+  - to: temple_hall
+    edge_type: door
+  contains:
+    npcs:
+    - id: temple_guardian
+      type: npc
+      name: Temple Guardian
+      description: A guardian protecting the temple entrance.
+    objects:
+    - id: temple_door
+      type: object
+      name: Temple Door
+      description: A large, ancient door.
+- id: temple_altar
+  type: location
+  name: Temple Altar
+  description: The main altar of the temple.
+  region: ancient_temple
+  connections:
+  - to: temple_hall
+    edge_type: path
+  contains:
+    objects:
+    - id: altar
+      type: object
+      name: Altar
+      description: An ancient altar for rituals.
+- id: temple_hall
+  type: location
+  name: Temple Hall
+  description: A grand hall inside the temple.
+  region: ancient_temple
+  connections:
+  - to: ancient_temple_entrance
+    edge_type: door
+  - to: temple_altar
+    edge_type: path
+  contains:
+    npcs:
+    - id: npc_paladin_guard
+      type: npc
+      name: Sir Aric
+      description: A stoic paladin guarding the entrance.
+      personality: Honorable and rigid.
+      dialogue_quest: true
+      social_persona: persona_sir_aric
+      properties:
+        has_items: ["item_sun_blade", "item_silver_plate"]
+    items:
+    - id: ancient_artifact
+      type: item
+      name: Ancient Artifact
+      description: A mysterious artifact from a bygone era.
+- id: loc_secret_lab
+  type: location
+  name: Arcane Weaving Sanctum
+  description: A hidden chamber where the ley lines of the world intersect. The air is thick with shimmering arcane threads, and floating crystal resonators hum with the stolen vibrations of reality itself.
+  region: ancient_temple
+  connections:
+  - to: temple_hall
+    edge_type: door
+    bidirectional: true
+  contains:
+    npcs:
+    - id: npc_megan
+      type: npc
+      name: "Megan the Mystic"
+      personality: "Mysterious high elf sorceress experimenting with dynamic reality weaving."
+      speech_style: "Enigmatic, flowing, and analytical."
+      dialogue_quest: true
+      social_persona: persona_megan
+      properties:
+          has_items: ["item_crystal_staff", "item_star_robe"]
+    items:
+    - id: item_prototype
+      name: Aetheric Prototype
+      type: item
+- id: anc_hidden_grove
+  type: location
+  name: Ancient Hidden Grove
+  description: A secluded grove, difficult to find.
+  region: ancient_temple
+  connections:
+  - to: temple_altar
+    edge_type: path
+    bidirectional: true
+  contains:
+    objects:
+      - id: obj_fort_portal
+        name: "Ancient Stone Portal"
+        type: object
+        properties:
+          is_portal: true
+          target_location: loc_fort
+          requires_item: summoning_rune

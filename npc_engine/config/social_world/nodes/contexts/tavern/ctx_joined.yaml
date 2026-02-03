@@ -1,0 +1,8 @@
+id: ctx_joined
+type: context
+name: "Alliance Forged"
+description: "Dolores checks her bowstring. 'Done. Lead the way, boss. Just don't get me killed.'"
+connections: []
+properties:
+  is_locked: true
+  required_concept: cpt_agreement

@@ -1,0 +1,114 @@
+id: atlas_paladins
+type: persona_group
+description: "Order of the Radiant Sun."
+
+concepts:
+  - id: cpt_respect
+    type: concept
+    name: "Respect"
+  - id: cpt_quest_none
+    type: concept
+    name: "No Ambition"
+  - id: cpt_quest_easy
+    type: concept
+    name: "Easy Task"
+  - id: cpt_quest_hard
+    type: concept
+    name: "Epic Task"
+
+personas:
+  - id: persona_sir_aric
+    type: persona
+    name: "Sir Aric of the Sun"
+    description: "A stoic and unwavering paladin of the Radiant Sun. He stands tall in polished silver armor, his presence radiating an aura of calm authority. His oath is his life, and his blade only strikes against the darkness."
+    tags: ["paladin", "lawful", "heavy_armor"]
+    properties:
+      target_social_goal: "ctx_aric_blessing"
+      behavior_on_enter: "active"
+      perform_quest_analysis: true
+      use_dynamic_generation: true
+      oracle_interpretation: "a blinding flash of divine light and a voice like a trumpet, commanding from the Radiant Sun itself"
+
+    equipment:
+      weapons:
+        - id: item_sun_blade
+          name: "Sun Blade"
+          pddl_tags: ["blade", "holy", "radiant"]
+          visual_fragment: "a longsword with a golden crossguard that hums with holy energy"
+      clothes:
+        - id: item_silver_plate
+          name: "Silver Plate Armor"
+          pddl_tags: ["armor", "heavy"]
+          visual_fragment: "impeccably polished plate armor reflecting the ambient light"
+
+    behavior_rules:
+      - id: act_holy_salute
+        mood: neutral
+        requires_holding_tag: holy
+        narrative_template: "brings the hilt of his {item_name} to his forehead in a formal salute"
+      
+      - id: act_divine_glow
+        mood: righteous
+        requires_holding_tag: holy
+        narrative_template: "raises his {item_name}, and the steel begins to radiate a blinding white light"
+
+      - id: act_armor_clank
+        mood: resolute
+        requires_wearing_tag: armor
+        narrative_template: "stands firm, his {item_name} creaking slightly as he shifts his weight like an immovable bastion"
+
+    contexts:
+      # --- DIRECT MISSION BRIEFING (NO PRELUDES) ---
+      - id: ctx_quest_offer
+        type: context
+        name: "Order's Command"
+        description: "Sir Aric wastes no time. He slams a heavy parchment onto the temple altar, pointing a gauntleted finger at the marked locations. 'The darkness gathers. Here are the tasks the Order requires completed immediately.'"
+        connections:
+          - to: ctx_aric_duty
+            direction: forward
+        properties:
+          is_start: true  # <--- Starts here immediately!
+          induces_mood: "resolute"
+
+      - id: ctx_aric_intro
+        type: context
+        name: "Temple Guard"
+        description: "Sir Aric stands before the inner sanctum, his hand resting lightly on his blade."
+        connections:
+          - to: ctx_aric_duty
+            direction: forward
+          - to: ctx_aric_righteous
+            direction: forward
+        properties:
+          is_start: false # No longer start
+
+      - id: ctx_aric_duty
+        type: context
+        name: "Path of Duty"
+        description: "Aric speaks of oaths and the heavy burden of guardianship."
+        connections:
+          - to: ctx_aric_intro
+            direction: backward
+        properties:
+          is_locked: false
+          induces_mood: "resolute"
+
+      - id: ctx_aric_righteous
+        type: context
+        name: "Divine Judgment"
+        description: "The Paladin's gaze intensifies, searching your soul for any trace of darkness."
+        connections:
+          - to: ctx_aric_intro
+            direction: backward
+        properties:
+          is_locked: false
+          induces_mood: "righteous"
+
+      - id: ctx_aric_blessing
+        type: context
+        name: "Radiant Blessing"
+        description: "You have proven your worth. The light welcomes you."
+        connections: []
+        properties:
+          is_locked: true
+          required_concept: cpt_respect

@@ -1,0 +1,30 @@
+actions:
+  move:
+    params: ["actor", "from", "to"]
+    description: "Move from {from} to {to}"
+  pickup:
+    params: ["actor", "item", "location"]
+    description: "Pick up {item} at {location}"
+  defeat:
+    params: ["actor", "target", "location"]
+    description: "Defeat {target} at {location}"
+  avoid:
+    params: ["actor", "target", "location"]
+    description: "Avoid {target} at {location}"
+
+
+## To change them to English (or raw-like format), we can update this file.
+
+#  For example:
+#
+#   1 actions:
+#   2   move:
+#   3     params: ["actor", "from", "to"]
+#   4     description: "move {actor} {from} {to}"
+
+#  Or just simple English:
+#
+#   1 actions:
+#   2   move:
+#   3     params: ["actor", "from", "to"]
+#   4     description: "Move from {from} to {to}"

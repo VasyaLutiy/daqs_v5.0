@@ -1,0 +1,10 @@
+id: ctx_quest_offer
+type: context
+name: "Mission Dispatch"
+description: "Masha's interface flickers as she accesses the local quest board. 'Your credentials have been temporarily elevated. I can now provide tactical objectives.'"
+connections:
+  - to: ctx_intro
+    direction: backward
+properties:
+  is_locked: true
+  required_concept: cpt_trust

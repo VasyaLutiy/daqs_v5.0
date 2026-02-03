@@ -1,0 +1,5 @@
+world_id: "social_world"
+name: "Social Interaction World"
+description: "A world for social interactions and NPC dialogues"
+quest_chains: {}
+abilities: {}

@@ -1,0 +1,114 @@
+id: enchanted_forest
+type: region
+name: Enchanted Forest
+description: A mystical forest filled with ancient secrets.
+locations:
+- id: hidden_grove
+  type: location
+  name: Hidden Grove
+  description: A secluded grove, difficult to find.
+  region: enchanted_forest
+  connections:
+  - to: forest_clearing
+    edge_type: path
+  contained_items: []
+  contained_npcs: []
+  contained_objects: []
+  contains:
+    items:
+    - id: summoning_rune
+      type: item
+      name: Summoning Rune
+      description: A rune used for ancient rituals.
+- id: dark_thicket
+  type: location
+  name: Dark Thicket
+  description: A dense, shadowy part of the forest.
+  region: enchanted_forest
+  connections:
+  - to: forest_clearing
+    edge_type: path
+  - to: ancient_temple_entrance
+    edge_type: path
+  - to: bridge_crossing
+    edge_type: path
+  contained_items: []
+  contained_npcs: []
+  contained_objects: []
+  contains:
+    npcs:
+    - id: shadow_guards
+      type: npc
+      name: Shadow Guards
+      description: Mysterious guardians lurking in the shadows.
+      personality: Cryptic, ancient, and bound by duty. They serve a power that predates
+        the forest itself.
+      speech_style: Whispering, slow, and uses metaphors about light, shadow, and
+        the passage of eons.
+      properties:
+        has_items:
+        - templedoor_key
+        patrol_route:
+        - dark_thicket
+    objects:
+    - id: dark_crystal
+      type: object
+      name: Dark Crystal
+      description: A crystal radiating dark energy.
+- id: forest_clearing
+  type: location
+  name: Forest Clearing
+  description: A sunlit clearing surrounded by tall trees.
+  region: enchanted_forest
+  connections:
+  - to: hidden_grove
+    edge_type: path
+  - to: dark_thicket
+    edge_type: path
+  contained_items: []
+  contained_npcs: []
+  contained_objects: []
+  contains:
+    items:
+    - id: forest_herbs
+      type: item
+      name: Forest Herb
+      description: Medicinal herbs found in the forest.
+- id: forest_entrance
+  type: location
+  name: Forest Entrance
+  description: The entry point to the Enchanted Forest.
+  region: enchanted_forest
+  connections:
+  - to: forest_clearing
+    edge_type: path
+    bidirectional: true
+  contained_items: []
+  contained_npcs: []
+  contained_objects: []
+  contains:
+    objects:
+    - id: ancient_oak
+      type: object
+      name: Ancient Oak
+      description: A massive, ancient oak tree.
+- id: tavern
+  type: location
+  name: Broken Cask Tavern
+  description: A dimly lit tavern nestled in the Enchanted Forest, frequented by adventurers and locals alike. The air is thick with the scent of ale and roasted meat, and the walls are adorned with hunting trophies and old maps.
+  region: enchanted_forest
+  connections:
+  - to: forest_clearing
+    edge_type: path
+    bidirectional: true
+  contained_items: []
+  contained_npcs: []
+  contained_objects: []
+  contains:
+    npcs:
+    - id: npc_dolores
+      type: npc
+      dialogue_quest: true
+      social_persona: persona_dolores
+      properties:
+          has_items: ["item_shadow_sword", "item_soul_dagger", "item_runic_leather"]

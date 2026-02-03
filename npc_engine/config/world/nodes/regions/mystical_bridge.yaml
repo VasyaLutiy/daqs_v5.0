@@ -1,0 +1,25 @@
+id: mystical_bridge
+type: region
+name: Mystical Bridge
+description: A magical bridge connecting the forest and the temple.
+locations:
+- id: bridge_crossing
+  type: location
+  name: Bridge Crossing
+  description: The central crossing of the mystical bridge.
+  region: mystical_bridge
+  connections:
+  - to: dark_thicket
+    edge_type: path
+  - to: paladin_entrance
+  contained_items: []
+  contained_npcs: []
+  contained_objects: []
+  contains:
+    items:
+    - id: templedoor_key
+      type: item
+      name: TempleDoor Key
+      description: A key that unlocks the temple door and interacts with the guardian.
+      properties:
+        linked_object: temple_door

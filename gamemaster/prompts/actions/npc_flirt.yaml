@@ -1,0 +1,5 @@
+id: action_npc_flirt
+text: |
+  Dolores says a short greeting to the player.
+
+  Response: "You look like you could use some company. Name's Dolores - I kill things for coin. Interested?"

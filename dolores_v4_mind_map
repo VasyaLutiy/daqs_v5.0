@@ -1,0 +1,27 @@
+digraph {
+	bgcolor=transparent rankdir=TB
+	node [fontname=Arial fontsize=10 shape=box style="rounded,filled"]
+	edge [color="#555555"]
+	ctx_tavern_intro [label="Dolores' Gaze" color="#cc0000" fillcolor="#ffcccc" penwidth=2]
+	ctx_bar_counter [label="Bar Counter" color="#000000" fillcolor="#ffffff" penwidth=1]
+	ctx_mockery [label="Elven Scorn" color="#000000" fillcolor="#ffffff" penwidth=1]
+	ctx_brawl [label="Tavern Brawl" color="#000000" fillcolor="#ffffff" penwidth=1]
+	ctx_apology [label="Apology Attempt" color="#000000" fillcolor="#ffffff" penwidth=1]
+	ctx_neutral_talk [label="🔒 Small Talk" color="#999999" fillcolor="#eeeeee" penwidth=1]
+	ctx_shadow_entry [label="🔒 The Shadow Corner" color="#999999" fillcolor="#eeeeee" penwidth=1]
+	ctx_shadow_deal [label="⭐ The Deal" color="#000000" fillcolor="#ffffcc" penwidth=2]
+	ctx_partnership [label="🔒 Business Proposition" color="#999999" fillcolor="#eeeeee" penwidth=1]
+	ctx_joined [label="🔒 Alliance Forged" color="#999999" fillcolor="#eeeeee" penwidth=1]
+	ctx_tavern_intro -> ctx_neutral_talk
+	ctx_tavern_intro -> ctx_mockery
+	ctx_tavern_intro -> ctx_bar_counter
+	ctx_mockery -> ctx_brawl
+	ctx_mockery -> ctx_neutral_talk
+	ctx_brawl -> ctx_apology
+	ctx_apology -> ctx_neutral_talk
+	ctx_neutral_talk -> ctx_tavern_intro
+	ctx_neutral_talk -> ctx_shadow_entry
+	ctx_neutral_talk -> ctx_mockery
+	ctx_shadow_entry -> ctx_shadow_deal
+	ctx_partnership -> ctx_joined
+}

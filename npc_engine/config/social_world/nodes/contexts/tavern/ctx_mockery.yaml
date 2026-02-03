@@ -1,0 +1,10 @@
+id: ctx_mockery
+type: context
+name: "Elven Scorn"
+description: "A smirk touches Dolores' lips. 'Retrieving herbs? Don't break a nail, adventurer. The rats in the cellar are fierce.'"
+connections:
+  - to: ctx_neutral_talk
+    direction: forward
+properties:
+  is_locked: true
+  required_concept: cpt_quest_easy

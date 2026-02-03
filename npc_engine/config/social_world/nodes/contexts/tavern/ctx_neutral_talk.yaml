@@ -1,0 +1,10 @@
+id: ctx_neutral_talk
+type: context
+name: "Small Talk"
+description: "Dolores shrugs and returns to her drink. 'Quiet night. Good for drinking, bad for business.'"
+connections:
+  - to: ctx_tavern_intro
+    direction: backward
+properties:
+  is_locked: true
+  required_concept: cpt_quest_none

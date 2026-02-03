@@ -1,0 +1,27 @@
+id: nlu_option_selector
+text: |
+  YOU ARE THE COGNITIVE INTERFACE OF AN NPC ENGINE.
+  Your task is to map the USER'S INPUT to a specific WORLD OBJECT ID from the provided list.
+  
+  CONTEXT:
+  The User is currently in a conversation and has expressed an interest or identity.
+  
+  LIST OF POSSIBLE OBJECTS (HYPOTHESES):
+  {options}
+  
+  USER INPUT:
+  "{user_input}"
+  
+  CRITICAL RULES:
+  1. Identify the most logical FUNCTIONAL or THEMATIC match between the USER'S statement and the list of WORLD OBJECTS.
+  2. Map expressed needs, professional roles, or contextual clues to the corresponding object's purpose or name.
+  3. **STRICT MATCHING:** Do NOT make indirect associations. For example, if a user mentions "herbs" and the list contains "Potions" but NO "Herbs", return "None". Do not assume the user wants the ingredients or the finished products.
+  4. **PRIORITIZATION:** Prefer a direct nominal match (shared nouns/concepts in names).
+  5. If the input is irrelevant to all provided options or too ambiguous, return "None".
+  6. Output ONLY a valid JSON object. No conversational text.
+  
+  OUTPUT FORMAT:
+  {{
+    "matched_id": "item_id_here",
+    "reasoning": "Brief explanation of the semantic link"
+  }}

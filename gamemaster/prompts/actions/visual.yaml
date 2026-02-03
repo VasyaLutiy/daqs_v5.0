@@ -1,0 +1,10 @@
+id: action_visual
+text: |
+  ACTION: VISUAL EVENT
+  Description: {action_name}
+  
+  Instructions:
+  1. The NPC performs the visual action described above.
+  2. Incorporate this action naturally into the narrative.
+  3. Respond to the player's input while performing this action.
+  4. Keep the description consistent with the provided details.

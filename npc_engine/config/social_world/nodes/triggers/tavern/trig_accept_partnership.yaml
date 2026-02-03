@@ -1,0 +1,6 @@
+id: trig_accept_partnership
+type: trigger
+name: "Accept Offer"
+description: "Agree to her terms and form an alliance."
+parent_context: ctx_partnership
+yields: cpt_agreement

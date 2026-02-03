@@ -1,0 +1,48 @@
+{
+  "plans": [
+    [
+      "apply-concept(player_test, ctx_tavern_intro, ctx_neutral_talk, cpt_quest_none)",
+      "shift-context(player_test, ctx_tavern_intro, ctx_neutral_talk)",
+      "activate-trigger(player_test, ctx_neutral_talk, trig_find_coin, cpt_shadow_token)",
+      "activate-trigger(player_test, ctx_neutral_talk, trig_listen_rumors, cpt_shadow_rumor)",
+      "apply-combo-concept(player_test, ctx_neutral_talk, ctx_shadow_entry, cpt_shadow_rumor, cpt_shadow_token)",
+      "shift-context(player_test, ctx_neutral_talk, ctx_shadow_entry)",
+      "shift-context(player_test, ctx_shadow_entry, ctx_shadow_deal)"
+    ],
+    [
+      "shift-context_player_test_ctx_tavern_intro_ctx_mockery()",
+      "shift-context_player_test_ctx_mockery_ctx_brawl()",
+      "shift-context_player_test_ctx_brawl_ctx_apology()",
+      "activate-trigger_player_test_ctx_apology_trig_apologize_cpt_apology()",
+      "apply-concept_player_test_ctx_apology_ctx_neutral_talk_cpt_quest_none()",
+      "shift-context_player_test_ctx_apology_ctx_neutral_talk()",
+      "shift-context_player_test_ctx_neutral_talk_ctx_mockery()",
+      "shift-context_player_test_ctx_mockery_ctx_brawl()",
+      "shift-context_player_test_ctx_brawl_ctx_apology()",
+      "shift-context_player_test_ctx_apology_ctx_neutral_talk()",
+      "activate-trigger_player_test_ctx_neutral_talk_trig_find_coin_cpt_shadow_token()",
+      "activate-trigger_player_test_ctx_neutral_talk_trig_listen_rumors_cpt_shadow_rumor()",
+      "apply-combo-concept_player_test_ctx_neutral_talk_ctx_shadow_entry_cpt_shadow_rumor_cpt_shadow_token()",
+      "shift-context_player_test_ctx_neutral_talk_ctx_shadow_entry()",
+      "shift-context_player_test_ctx_shadow_entry_ctx_shadow_deal()"
+    ],
+    [
+      "shift-context_player_test_ctx_tavern_intro_ctx_mockery()",
+      "shift-context_player_test_ctx_mockery_ctx_brawl()",
+      "shift-context_player_test_ctx_brawl_ctx_apology()",
+      "activate-trigger_player_test_ctx_apology_trig_apologize_cpt_apology()",
+      "apply-concept_player_test_ctx_apology_ctx_neutral_talk_cpt_quest_none()",
+      "shift-context_player_test_ctx_apology_ctx_neutral_talk()",
+      "shift-context_player_test_ctx_neutral_talk_ctx_mockery()",
+      "shift-context_player_test_ctx_mockery_ctx_brawl()",
+      "shift-context_player_test_ctx_brawl_ctx_apology()",
+      "shift-context_player_test_ctx_apology_ctx_neutral_talk()",
+      "activate-trigger_player_test_ctx_neutral_talk_trig_listen_rumors_cpt_shadow_rumor()",
+      "activate-trigger_player_test_ctx_neutral_talk_trig_find_coin_cpt_shadow_token()",
+      "apply-combo-concept_player_test_ctx_neutral_talk_ctx_shadow_entry_cpt_shadow_rumor_cpt_shadow_token()",
+      "shift-context_player_test_ctx_neutral_talk_ctx_shadow_entry()",
+      "shift-context_player_test_ctx_shadow_entry_ctx_shadow_deal()"
+    ]
+  ],
+  "total": 3
+}

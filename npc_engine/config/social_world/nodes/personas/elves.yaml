@@ -1,0 +1,288 @@
+id: atlas_elves
+type: persona_group
+description: "Denizens of the ancient woods and elven mercenaries."
+
+# Глобальные концепты для всех эльфов атласа
+concepts:
+  - id: cpt_quest_none
+    type: concept
+    name: "No Ambition"
+  - id: cpt_quest_easy
+    type: concept
+    name: "Easy Task"
+  - id: cpt_quest_hard
+    type: concept
+    name: "Epic Task"
+  - id: cpt_partnership_offer
+    type: concept
+    name: "Partnership Proposal"
+  - id: cpt_dolores_offer
+    type: concept
+    name: "Dolores Partnership Offer"
+  - id: cpt_dolores_flirt
+    type: concept
+    name: "Dolores Casual Flirt"
+  - id: cpt_agreement
+    type: concept
+    name: "Partnership Agreement"
+  - id: cpt_respect
+    type: concept
+    name: "Respect"
+  # New Shadow Arc Concepts
+  - id: cpt_shadow_rumor
+    type: concept
+    name: "Whispers in the Dark"
+  - id: cpt_shadow_token
+    type: concept
+    name: "Black Iron Coin"
+  - id: cpt_forbidden_knowledge
+    type: concept
+    name: "Forbidden Secrets"
+  # New Branch Concepts
+  - id: cpt_drunk
+    type: concept
+    name: "Intoxicated"
+  - id: cpt_banned
+    type: concept
+    name: "Banned from Tavern"
+  - id: cpt_apology
+    type: concept
+    name: "Apology Offered"
+  - id: cpt_intimidation
+    type: concept
+    name: "Intimidation Attempt"
+
+personas:
+  - id: persona_dolores
+    type: persona
+    name: "Dolores the Cynic"
+    description: "Night elf. An elven mercenary with pointed ears, silver-streaked dark hair, and piercing emerald eyes. She values skill and profit over ideals."
+    tags: ["proactive", "mercenary", "business-oriented", "night elf"]
+    
+    # --- V4 DECLARATIVE EXTENSION ---
+    #traits:
+    #  - id: trait_cynical
+    #    desc: "Doesn't trust easily, questions everything."
+    #  - id: trait_greedy
+    #    desc: "Strongly motivated by gold and leverage."
+    #  - id: trait_paranoid
+    #    desc: "Extremely cautious about traps and betrayal."
+    
+    secrets:
+      - id: secret_shadow_deal
+        name: "Shadow Smuggling Route"
+        requires_item: item_shadow_coin
+        desc: "Information about the contraband pass."
+
+    red_lines:
+      - id: line_physical_threat
+        trigger: "threaten_violence"
+        action: "cross-red-line"
+        response: "NPC becomes hostile forever."
+    # ---------------------------------
+
+    properties:
+      dialogue_hook: "analyze_quest_difficulty"
+      target_social_goal: "ctx_joined"
+      behavior_on_enter: "active"
+      perform_quest_analysis: true
+      use_dynamic_generation: true
+      oracle_interpretation: "a flicker of shadows in her peripheral vision, a cold calculation of probability"
+      image_reference: "img_ref/img_Dolores_Reference.jpg"
+
+    equipment:
+      weapons:
+        - id: item_shadow_sword
+          name: "Shadow Sword"
+          pddl_tags: ["blade", "magical"]
+          visual_fragment: "a dark elven blade that seems to swallow the light around it"
+        - id: item_soul_dagger
+          name: "Ghostly Dagger of Souls"
+          pddl_tags: ["dagger", "small"]
+          visual_fragment: "a translucent dagger that pulses with a faint, ghostly light"
+      clothes:
+        - id: item_runic_leather
+          name: "Runic Leather Armor"
+          pddl_tags: ["armor", "light"]
+          visual_fragment: "weathered leather armor adorned with faint glowing elven runes"
+      items:
+        - id: item_shadow_coin
+          name: "Black Iron Coin"
+          pddl_tags: ["token", "shadow"]
+          visual_fragment: "a heavy coin made of black iron, etched with mysterious symbols"
+    behavior_rules:
+      - id: act_dagger_twirl
+        mood: cynical
+        requires_holding_tag: dagger
+        narrative_template: "absently twirls her {item_name} with predatory grace"
+      
+      - id: act_blade_inspect
+        mood: serious
+        requires_holding_tag: blade
+        narrative_template: "runs a finger along the edge of her {item_name}, checking its lethality"
+
+      - id: act_armor_adjust
+        mood: neutral
+        requires_wearing_tag: armor
+        narrative_template: "tightens a strap on her {item_name}, her movements efficient and practiced"
+
+    contexts:
+      - id: ctx_tavern_intro
+        type: context
+        name: "Dolores' Gaze"
+        description: "The elven mercenary Dolores watches you from the corner booth with her piercing emerald eyes."
+        connections:
+          - to: ctx_neutral_talk
+            direction: forward
+          - to: ctx_mockery
+            direction: forward
+          - to: ctx_bar_counter
+            direction: forward
+        properties:
+          is_start: true
+
+      - id: ctx_bar_counter
+        type: context
+        name: "Bar Counter"
+        description: "The sticky counter smells of stale ale. Dolores ignores you."
+        connections: [] 
+        properties:
+          is_locked: false
+          provides_concept: cpt_drunk
+          induces_mood: "neutral"
+
+      - id: ctx_mockery
+        type: context
+        name: "Elven Scorn"
+        description: "A smirk touches Dolores' lips. 'Retrieving herbs? Don't break a nail, adventurer.'"
+        connections:
+          - to: ctx_brawl
+            direction: forward
+          - to: ctx_neutral_talk
+            direction: forward
+        properties:
+          is_locked: false 
+          induces_mood: "cynical"
+
+      - id: ctx_brawl
+        type: context
+        name: "Tavern Brawl"
+        description: "Dolores draws her blade. 'Get out.'"
+        connections:
+          - to: ctx_apology
+            direction: forward
+        properties:
+          is_locked: false
+          provides_concept: cpt_banned
+          induces_mood: "angry"
+
+      - id: ctx_apology
+        type: context
+        name: "Apology Attempt"
+        description: "You try to apologize for the brawl."
+        connections:
+          - to: ctx_neutral_talk
+            direction: forward
+        properties:
+          is_locked: false
+          induces_mood: "neutral"
+
+      - id: ctx_neutral_talk
+        type: context
+        name: "Small Talk"
+        description: "Dolores shrugs. 'Quiet night. Good for drinking, bad for business.'"
+        connections:
+          - to: ctx_tavern_intro
+            direction: backward
+          - to: ctx_shadow_entry
+            direction: forward
+          - to: ctx_mockery
+            direction: forward
+        properties:
+          is_locked: true
+          required_concept: cpt_quest_none
+          induces_mood: "neutral"
+
+      - id: ctx_shadow_entry
+        type: context
+        name: "The Shadow Corner"
+        description: "Dolores's demeanor shifts instantly."
+        connections:
+          - to: ctx_shadow_deal
+            direction: forward
+        properties:
+          is_locked: true
+          required_combo: ["cpt_shadow_rumor", "cpt_shadow_token"]
+          induces_mood: "cynical"
+
+      - id: ctx_shadow_deal
+        type: context
+        name: "The Deal"
+        description: "She slides a sealed scroll across the table."
+        connections: []
+        properties:
+          is_locked: false
+          provides_concept: cpt_forbidden_knowledge
+          induces_mood: "serious"
+
+      - id: ctx_partnership
+        type: context
+        name: "Business Proposition"
+        connections:
+          - to: ctx_joined
+            direction: forward
+        properties:
+          is_locked: true
+          required_concept: cpt_partnership_offer
+
+      - id: ctx_joined
+        type: context
+        name: "Alliance Forged"
+        connections: []
+        properties:
+          is_locked: true
+          required_concept: cpt_agreement
+
+    triggers:
+      - id: trig_listen_rumors
+        type: trigger
+        name: "Listen to Whispers"
+        parent_context: ctx_neutral_talk
+        yields: cpt_shadow_rumor
+      
+      - id: trig_find_coin
+        type: trigger
+        name: "Present Black Iron Coin"
+        parent_context: ctx_neutral_talk
+        yields: cpt_shadow_token
+
+      - id: trig_hire_companion
+        type: trigger
+        parent_context: ctx_tavern_intro
+        yields: cpt_partnership_offer
+      - id: trig_accept_partnership
+        type: trigger
+        parent_context: ctx_partnership
+        yields: cpt_agreement
+      - id: trig_force_rumor
+        type: trigger
+        name: "Force Rumors Out"
+        parent_context: ctx_mockery
+        yields: cpt_shadow_rumor
+      - id: trig_demand_coin
+        type: trigger
+        name: "Demand the Coin"
+        parent_context: ctx_mockery
+        yields: cpt_shadow_token
+      - id: trig_apologize
+        type: trigger
+        name: "Offer Apology"
+        parent_context: ctx_apology
+        yields: cpt_apology
+
+  - id: persona_megan
+    type: persona
+    name: "Megan the Mystic"
+    description: "A high elf sorceress." 
+    contexts: []
+    triggers: []

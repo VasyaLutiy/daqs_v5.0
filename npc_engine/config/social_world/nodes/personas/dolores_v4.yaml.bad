@@ -1,0 +1,26 @@
+id: persona_dolores
+name: "Dolores the Cynic"
+type: persona_v4
+traits:
+  - id: trait_cynical
+    desc: "Не верит на слово, требует доказательств."
+  - id: trait_greedy
+    desc: "Любит звонкую монету."
+  - id: trait_paranoid
+    desc: "Боится шпионов и засад."
+
+secrets:
+  - id: secret_shadow_deal
+    name: "The Shadow Deal Details"
+    requires_item: item_shadow_coin
+    description: "Информация о поставках контрабанды через северный перевал."
+
+red_lines:
+  - trigger: "physical_threat"
+    action: "cross-red-line"
+    response: "Достает кинжал и прекращает любой диалог навсегда."
+  - trigger: "extreme_insult"
+    action: "cross-red-line"
+    response: "Плюет под ноги и уходит в глубокое молчание."
+
+base_mood: "neutral"

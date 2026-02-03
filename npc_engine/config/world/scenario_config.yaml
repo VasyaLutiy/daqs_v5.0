@@ -1,0 +1,396 @@
+# Базовый граф игрового мира
+# Структура: регионы → локации → под-локации → объекты
+
+version: "1.0"
+world_id: "enchanted_realm"
+name: "Зачарованное Королевство"
+
+# ============================================================
+# МЕТАДАННЫЕ МИРА
+# ============================================================
+meta:
+  description: "Древнее королевство, где магия переплетается с реальностью"
+  difficulty: medium
+  estimated_time: "2-4 часа"
+
+  # Глобальные условия мира
+  global_conditions:
+    - time_of_day: any          # any, day, night
+    - weather: any              # any, clear, storm, fog
+    - world_state: normal       # normal, corrupted, cleansed
+
+# ============================================================
+# ТИПЫ УЗЛОВ (для генерации PDDL типов)
+# ============================================================
+node_types:
+  region:
+    description: "Крупный регион мира"
+    pddl_type: region
+
+  location:
+    description: "Конкретная локация"
+    pddl_type: location
+
+  sub_location:
+    description: "Под-локация внутри локации"
+    pddl_type: location  # Тот же тип в PDDL
+
+  object:
+    description: "Интерактивный объект"
+    pddl_type: object
+
+  item:
+    description: "Предмет, который можно взять"
+    pddl_type: item
+
+  npc:
+    description: "NPC персонаж"
+    pddl_type: npc
+
+# ============================================================
+# ТИПЫ СВЯЗЕЙ (для генерации PDDL действий)
+# ============================================================
+edge_types:
+  path:
+    description: "Путь между локациями"
+    action: move
+    bidirectional: true
+
+  contains:
+    description: "Содержит объект/под-локацию"
+    action: null  # Структурная связь
+    bidirectional: false
+
+  leads_to:
+    description: "Односторонний переход"
+    action: move
+    bidirectional: false
+
+  guards:
+    description: "Охраняет доступ"
+    action: defeat
+    bidirectional: false
+
+  unlocks:
+    description: "Открывает доступ"
+    action: unlock
+    bidirectional: false
+
+  requires:
+    description: "Требует предмет/условие"
+    action: null  # Предусловие
+    bidirectional: false
+
+# ============================================================
+# ГРАФ МИРА
+# ============================================================
+graph:
+  # ==================== РЕГИОНЫ ====================
+  regions:
+    enchanted_forest:
+      type: region
+      name: "Зачарованный Лес"
+      description: "Древний лес, полный магии и опасностей"
+      properties:
+        ambient: mystical
+        danger_level: low
+
+      # Локации внутри региона
+      locations:
+        forest_entrance:
+          type: location
+          name: "Вход в Лес"
+          description: "Тропа, ведущая в глубь леса"
+          properties:
+            is_safe_zone: true
+            has_fast_travel: true
+
+          # Связи
+          connections:
+            - to: forest_clearing
+              edge_type: path
+              conditions: []
+
+            - to: dark_thicket
+              edge_type: path
+              conditions:
+                - has_ability: stealth
+                - OR:
+                  - has_item: torch
+                  - has_ability: magic
+
+        forest_clearing:
+          type: location
+          name: "Лесная Поляна"
+          description: "Светлая поляна с древним дубом"
+
+          # Объекты на локации
+          objects:
+            ancient_oak:
+              type: object
+              name: "Древний Дуб"
+              description: "Тысячелетний дуб с магической аурой"
+              interactions:
+                - action: examine
+                  result: reveals_rune_location
+                - action: use_magic_on
+                  result: activates_portal
+                  conditions:
+                    - has_ability: magic
+
+          # Предметы на локации
+          items:
+            forest_herbs:
+              type: item
+              name: "Лесные Травы"
+              description: "Целебные травы"
+              properties:
+                pickable: true
+                consumable: true
+                effect: restore_health
+
+          connections:
+            - to: forest_entrance
+              edge_type: path
+            - to: hidden_grove
+              edge_type: leads_to
+              conditions:
+                - discovered: rune_location
+
+        hidden_grove:
+          type: location
+          name: "Скрытая Роща"
+          description: "Тайное место силы"
+          properties:
+            hidden: true
+            discovery_hint: "Древний дуб хранит секрет"
+
+          items:
+            summoning_rune:
+              type: item
+              name: "Руна Призыва"
+              description: "Древняя руна для активации порталов"
+              properties:
+                pickable: true
+                quest_item: true
+                used_for: portal_activation
+
+          connections:
+            - to: forest_clearing
+              edge_type: path
+
+        dark_thicket:
+          type: location
+          name: "Тёмная Чаща"
+          description: "Опасная часть леса"
+          properties:
+            danger_level: medium
+
+          # NPC/враги
+          npcs:
+            shadow_guards:
+              type: npc
+              name: "Теневые Стражи"
+              description: "Призрачные охранники"
+              properties:
+                hostile: true
+                can_be_avoided: true
+                avoid_condition: has_ability:stealth
+                defeat_reward: shadow_essence
+
+          connections:
+            - to: forest_entrance
+              edge_type: path
+            - to: ancient_temple_entrance
+              edge_type: leads_to
+              conditions:
+                - OR:
+                  - defeated: shadow_guards
+                  - avoided: shadow_guards
+
+    ancient_temple:
+      type: region
+      name: "Древний Храм"
+      description: "Руины храма древней цивилизации"
+      properties:
+        ambient: ominous
+        danger_level: high
+
+      locations:
+        ancient_temple_entrance:
+          type: location
+          name: "Вход в Храм"
+          description: "Массивные каменные врата"
+
+          objects:
+            temple_door:
+              type: object
+              name: "Врата Храма"
+              description: "Запечатанные магией врата"
+              properties:
+                locked: true
+                lock_type: magical
+              interactions:
+                - action: unlock
+                  conditions:
+                    - has_item: temple_key
+                  result: opens_temple_hall
+                - action: use_magic_on
+                  conditions:
+                    - has_ability: magic
+                    - magic_level: 2
+                  result: opens_temple_hall
+
+          connections:
+            - to: dark_thicket
+              edge_type: path
+            - to: temple_hall
+              edge_type: leads_to
+              conditions:
+                - state: temple_door:unlocked
+
+        temple_hall:
+          type: location
+          name: "Зал Храма"
+          description: "Главный зал с колоннами"
+
+          npcs:
+            temple_guardian:
+              type: npc
+              name: "Хранитель Храма"
+              description: "Могучий страж древних тайн"
+              properties:
+                hostile: true
+                can_be_avoided: false
+                difficulty: hard
+                defeat_reward: guardian_blessing
+
+          connections:
+            - to: ancient_temple_entrance
+              edge_type: path
+            - to: temple_altar
+              edge_type: leads_to
+              conditions:
+                - defeated: temple_guardian
+
+        temple_altar:
+          type: location
+          name: "Алтарь Храма"
+          description: "Священный алтарь в глубине храма"
+
+          objects:
+            altar:
+              type: object
+              name: "Древний Алтарь"
+              description: "Алтарь для ритуалов"
+              interactions:
+                - action: place_item
+                  target: ancient_artifact
+                  result: prepares_ritual
+                - action: activate
+                  conditions:
+                    - state: altar:prepared
+                    - has_item: summoning_rune
+                  result: destroys_crystal
+
+          items:
+            ancient_artifact:
+              type: item
+              name: "Древний Амулет"
+              description: "Амулет Разрушения"
+              properties:
+                pickable: true
+                quest_item: true
+                used_for: crystal_destruction
+
+          objects_2:  # Дополнительные объекты
+            dark_crystal:
+              type: object
+              name: "Кристалл Тьмы"
+              description: "Источник зла"
+              properties:
+                destructible: true
+                destruction_method: ritual
+                is_quest_target: true
+              states:
+                - intact
+                - weakened
+                - destroyed
+
+          connections:
+            - to: temple_hall
+              edge_type: path
+
+# ============================================================
+# КВЕСТОВЫЕ ЦЕПОЧКИ (Goals для PDDL)
+# ============================================================
+quest_chains:
+  main_quest:
+    id: destroy_darkness
+    name: "Уничтожение Тьмы"
+    description: "Найти артефакт и уничтожить Кристалл"
+
+    stages:
+      - id: find_artifact
+        name: "Найти Амулет"
+        goal_condition: "has_item:ancient_artifact"
+        hint: "Амулет в глубине храма"
+
+      - id: find_rune
+        name: "Найти Руну"
+        goal_condition: "has_item:summoning_rune"
+        hint: "Руна скрыта в лесу"
+
+      - id: destroy_crystal
+        name: "Уничтожить Кристалл"
+        goal_condition: "state:dark_crystal:destroyed"
+        requires_stages: [find_artifact, find_rune]
+
+    # Финальная цель для PDDL
+    final_goal:
+      - "state:dark_crystal:destroyed"
+
+    # Альтернативные пути (hints для NPC)
+    paths:
+      stealth_path:
+        name: "Путь Тени"
+        requires: [stealth]
+        recommended_for: [stealth, lockpick]
+
+      combat_path:
+        name: "Путь Воина"
+        requires: [combat]
+        recommended_for: [combat]
+
+      magic_path:
+        name: "Путь Мага"
+        requires: [magic]
+        recommended_for: [magic]
+
+# ============================================================
+# СПОСОБНОСТИ (для проверки условий)
+# ============================================================
+abilities:
+  stealth:
+    name: "Скрытность"
+    levels: [1, 2, 3]
+
+  combat:
+    name: "Бой"
+    levels: [1, 2, 3]
+
+  magic:
+    name: "Магия"
+    levels: [1, 2, 3]
+
+  lockpick:
+    name: "Взлом"
+    levels: [1, 2]
+
+# ============================================================
+# ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ
+# ============================================================
+variables:
+  time_limit: null
+  respawn_enabled: true
+  difficulty_scaling: true
