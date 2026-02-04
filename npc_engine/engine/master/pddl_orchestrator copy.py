@@ -1,11 +1,10 @@
 import jinja2
 from pathlib import Path
-from typing import Dict, Any, Set, Tuple
+from typing import Dict, Any, Set
 from npc_engine.engine.world.graph import WorldGraph
 from npc_engine.engine.world.player_state import PlayerState
 from npc_engine.engine.logging_config import logging_manager, get_component_level
 import yaml
-from npc_engine.engine.master.pddl_libs import SocialWorldAssembler
 
 logger = logging_manager.get_component_logger('master')
 
@@ -316,49 +315,245 @@ class PDDLOrchestrator:
     def assemble_social_problem(self, player_id: str, goal_context_id: str, dynamic_state: Dict[str, Any] = None, config_dir: str = "npc_engine/config/social_world", active_persona: str = None, custom_goal: str = None, constants: Dict[str, Set[str]] = None) -> str:
         template = self.env.get_template("social/problem.pddl.j2")
         
-        assembler = SocialWorldAssembler(config_path=Path(config_dir), logger=logger)
-        personas, target_atlas, target_persona_data = assembler.load_persona_bundle(active_persona)
-        contexts, concepts, triggers = assembler.load_world_data(target_atlas, target_persona_data)
+        config_path = Path(config_dir)
+        contexts = {}
+        concepts = {}
+        triggers = {}
+        personas = {}
+        
+        target_atlas = None
+        target_persona_data = None
+        
+        # 1. SEARCH FOR ATLAS CONTAINING ACTIVE PERSONA
+        pers_dir = config_path / "nodes" / "personas"
+        if pers_dir.exists():
+            for f in pers_dir.rglob("*.yaml"):
+                try:
+                    data = yaml.safe_load(f.read_text())
+                    
+                    if "personas" in data and isinstance(data["personas"], list):
+                        for p in data["personas"]:
+                            if "id" in p:
+                                personas[p['id']] = p
+                                if active_persona and p['id'] == active_persona:
+                                    target_atlas = data
+                                    target_persona_data = p
+                    elif "id" in data:
+                        personas[data['id']] = data
+                        if active_persona and data['id'] == active_persona:
+                            target_atlas = data
+                            target_persona_data = data
+                except Exception as e:
+                    logger.error(f"Error loading persona file {f}: {e}")
 
-        if active_persona:
-            assembler.apply_persona_overrides(contexts, active_persona, personas)
+        # 2. LOAD WORLD DATA
+        loaded_contexts = []
+        loaded_concepts = []
+        loaded_triggers = []
+        
+        if target_persona_data:
+            logger.info(f"Loading Social World from Persona: {active_persona}")
+            loaded_contexts = target_persona_data.get("contexts", [])
+            loaded_concepts = target_persona_data.get("concepts", [])
+            loaded_triggers = target_persona_data.get("triggers", [])
+            
+            if not loaded_contexts and target_atlas:
+                loaded_contexts = target_atlas.get("contexts", [])
+            if not loaded_concepts and target_atlas:
+                loaded_concepts = target_atlas.get("concepts", [])
+            if not loaded_triggers and target_atlas:
+                loaded_triggers = target_atlas.get("triggers", [])
+                
+        elif target_atlas:
+             loaded_contexts = target_atlas.get("contexts", [])
+             loaded_concepts = target_atlas.get("concepts", [])
+             loaded_triggers = target_atlas.get("triggers", [])
+             
+        else:
+            logger.info("No Atlas found. Loading Legacy World (Merged).")
+            ctx_dir = config_path / "nodes" / "contexts"
+            if ctx_dir.exists():
+                for f in ctx_dir.rglob("*.yaml"):
+                    data = yaml.safe_load(f.read_text())
+                    contexts[data['id']] = data
+            
+            cpt_dir = config_path / "nodes" / "concepts"
+            if cpt_dir.exists():
+                for f in cpt_dir.rglob("*.yaml"):
+                    data = yaml.safe_load(f.read_text())
+                    concepts[data['id']] = data
 
+            trig_dir = config_path / "nodes" / "triggers"
+            if trig_dir.exists():
+                for f in trig_dir.rglob("*.yaml"):
+                    data = yaml.safe_load(f.read_text())
+                    triggers[data['id']] = data
+
+        for ctx in loaded_contexts: contexts[ctx['id']] = ctx
+        for cpt in loaded_concepts: concepts[cpt['id']] = cpt
+        for trig in loaded_triggers: triggers[trig['id']] = trig
+
+        # APPLY PERSONA OVERRIDES
+        if active_persona and active_persona in personas:
+            p_data = personas[active_persona]
+            overrides = p_data.get('world_overrides', {})
+            logger.info(f"Applying overrides for persona: {active_persona}")
+            
+            for ctx_id, override_props in overrides.items():
+                if ctx_id in contexts:
+                    ctx_data = contexts[ctx_id]
+                    for k, v in override_props.items():
+                        if k != 'properties':
+                            ctx_data[k] = v
+                    if 'properties' not in ctx_data: ctx_data['properties'] = {}
+                    for k, v in override_props.items():
+                        if k not in ['name', 'description'] and k != 'properties':
+                            ctx_data['properties'][k] = v
+
+        # Build objects
+        objects = []
+        objects.extend([f"{cid} - context" for cid in contexts])
+        objects.extend([f"{cid} - concept" for cid in concepts])
+        objects.extend([f"{tid} - trigger" for tid in triggers])
+        objects.append(f"{player_id} - agent")
+
+        # V4: Add Secret and Trait Objects
+        if target_persona_data:
+            if "secrets" in target_persona_data:
+                for s in target_persona_data["secrets"]:
+                    objects.append(f"{s['id']} - secret")
+            if "traits" in target_persona_data:
+                for t in target_persona_data["traits"]:
+                    objects.append(f"{t['id']} - trait")
+            if active_persona:
+                objects.append(f"{active_persona} - agent")
+
+        # Helpers for constants logic
         domain_tags = constants.get("tags", set()) if constants else set()
         domain_moods = constants.get("moods", set()) if constants else set()
 
-        objects = assembler.build_social_objects(
-            player_id=player_id,
-            contexts=contexts,
-            concepts=concepts,
-            triggers=triggers,
-            target_persona_data=target_persona_data,
-            active_persona=active_persona,
-            domain_tags=domain_tags,
-        )
+        # V2: Add Equipment Objects
+        # ... (equipment logic already exists below)
 
-        # Add dynamic inventory items (if provided in dynamic_state)
-        extra_items = set()
-        if dynamic_state and dynamic_state.get("items"):
-            extra_items = set(dynamic_state["items"])
-            for item_id in extra_items:
-                objects.append(f"{item_id} - item")
+        if target_persona_data and "equipment" in target_persona_data:
+            eq = target_persona_data["equipment"]
+            if "clothes" in eq:
+                for item in eq["clothes"]:
+                    objects.append(f"{item['id']} - item")
+                    if "pddl_tags" in item:
+                        for tag in item["pddl_tags"]:
+                             if tag not in domain_tags:
+                                 objects.append(f"{tag} - tag")
+            if "weapons" in eq:
+                for item in eq["weapons"]:
+                    objects.append(f"{item['id']} - item")
+                    if "pddl_tags" in item:
+                        for tag in item["pddl_tags"]:
+                             if tag not in domain_tags:
+                                 objects.append(f"{tag} - tag")
+            if "items" in eq:
+                for item in eq["items"]:
+                    objects.append(f"{item['id']} - item")
+                    if "pddl_tags" in item:
+                        for tag in item["pddl_tags"]:
+                             if tag not in domain_tags:
+                                 objects.append(f"{tag} - tag")
 
-        init_facts = assembler.build_social_init_facts(
-            player_id=player_id,
-            goal_context_id=goal_context_id,
-            contexts=contexts,
-            triggers=triggers,
-            dynamic_state=dynamic_state,
-            target_persona_data=target_persona_data,
-            active_persona=active_persona,
-            domain_moods=domain_moods,
-            objects=objects,
-        )
+        # Build init
+        init_facts = []
+        
+        # Contexts
+        for cid, ctx in contexts.items():
+            props = ctx.get('properties', {})
+            for conn in ctx.get('connections', []):
+                target = conn['to']
+                init_facts.append(f"(connected {cid} {target})")
+                if conn.get('direction') == 'bidirectional':
+                    init_facts.append(f"(connected {target} {cid})")
+            
+            if props.get('is_locked') and cid != goal_context_id:
+                is_unlocked = dynamic_state and cid in dynamic_state.get('unlocked_contexts', [])
+                if not is_unlocked:
+                    init_facts.append(f"(locked {cid})")
+            
+            if props.get('required_concept'):
+                init_facts.append(f"(requires-concept {cid} {props['required_concept']})")
+                
+            if props.get('required_combo'):
+                combo = props['required_combo']
+                if len(combo) == 2:
+                    init_facts.append(f"(requires-combo {cid} {combo[0]} {combo[1]})")
+                
+            if props.get('provides_concept'):
+                init_facts.append(f"(provides-concept {cid} {props['provides_concept']})")
 
-        # Inject has-item facts for dynamic inventory
-        if extra_items:
-            for item_id in extra_items:
-                init_facts.append(f"(has-item {player_id} {item_id})")
+        # Triggers
+        for tid, trig in triggers.items():
+            parent = trig.get('parent_context')
+            if parent:
+                init_facts.append(f"(in-context {tid} {parent})")
+            yields = trig.get('yields')
+            if yields:
+                init_facts.append(f"(trigger-yields {tid} {yields})")
+
+        # Dynamic State
+        start_ctx = None
+        if dynamic_state and dynamic_state.get("current_context"):
+            start_ctx = dynamic_state.get("current_context")
+        if not start_ctx:
+            start_ctx = next((cid for cid, c in contexts.items() if c.get('properties', {}).get('is_start')), None)
+            
+        if start_ctx:
+            init_facts.append(f"(active-context {player_id} {start_ctx})")
+        else:
+            logger.warning("No starting context found for social problem!")
+
+        if dynamic_state:
+            for cpt in dynamic_state.get("concepts", []):
+                init_facts.append(f"(has-concept {player_id} {cpt})")
+            for v_ctx in dynamic_state.get("visited_contexts", []):
+                init_facts.append(f"(visited {v_ctx})")
+            for exh_trig in dynamic_state.get("exhausted_triggers", []):
+                init_facts.append(f"(exhausted {exh_trig})")
+
+        # V4: Inject Persona Traits and Secrets
+        if target_persona_data and active_persona:
+            if "traits" in target_persona_data:
+                for t in target_persona_data["traits"]:
+                    init_facts.append(f"(has-trait {active_persona} {t['id']})")
+            
+            if "secrets" in target_persona_data:
+                for s in target_persona_data["secrets"]:
+                    if "requires_item" in s:
+                        init_facts.append(f"(requires-item {s['id']} {s['requires_item']})")
+            
+            # Check dynamic hostility
+            if dynamic_state and dynamic_state.get("is_hostile"):
+                init_facts.append(f"(is-hostile {active_persona})")
+
+        # V2: Inject Equipment Facts
+        if target_persona_data and "equipment" in target_persona_data:
+            eq = target_persona_data["equipment"]
+            
+            def add_equip_facts(item_list, predicate):
+                for item in item_list:
+                    init_facts.append(f"({predicate} {player_id} {item['id']})") 
+                    if "pddl_tags" in item:
+                        for tag in item["pddl_tags"]:
+                            init_facts.append(f"(has-tag {item['id']} {tag})")
+                            init_facts.append(f"(is-tag {tag} {tag})")
+            
+            if "clothes" in eq:
+                add_equip_facts(eq["clothes"], "wearing")
+            if "weapons" in eq:
+                add_equip_facts(eq["weapons"], "holding")
+        
+        # V2: Inject Dynamic Mood
+        if dynamic_state and dynamic_state.get("current_mood"):
+             mood = dynamic_state["current_mood"]
+             if mood not in domain_moods:
+                 objects.append(f"{mood} - mood")
+             init_facts.append(f"(current-mood {player_id} {mood})")
 
         data = {
             "objects": objects,
@@ -368,5 +563,3 @@ class PDDLOrchestrator:
         }
         
         return template.render(data)
-
-    # === Helper methods for social world assembly (migrated to pddl_libs) ===

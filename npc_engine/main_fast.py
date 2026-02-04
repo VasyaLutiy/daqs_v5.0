@@ -164,11 +164,9 @@ def collect_location_data(world: WorldGraph, location_id: str, goal: Optional[st
     return npcs_nearby, exits, items_nearby
 
 def generate_plan_and_quest(world: WorldGraph, player: PlayerState, goal: Optional[str], oracle_mode: bool) -> Tuple[Optional[List[str]], List[Dict[str, Any]], str]:
-    print(f"generate_plan_and_quest called with goal: {goal}")
+    
     logger = logging_manager.get_component_logger('master')
-    
-    logger.info("generate_plan_and_quest called")
-    
+      
     if oracle_mode:
         target_world = world
         all_location_ids = [node_id for node_id, node in world.all_nodes.items() if node.type == NodeType.LOCATION]
@@ -232,7 +230,7 @@ def process_request(input_data: Dict[str, Any], oracle_mode: bool = False) -> Di
         npcs_nearby, exits, items_nearby = collect_location_data(world, player.current_location, goal)
         available_quests = collect_available_quests(world, player)
         
-        # Validate goal
+        '''# Validate goal
         if goal and goal.startswith("(has-item"):
             item_id = goal.split()[2]
             quest_ids = [q["id"] for q in available_quests]
@@ -240,7 +238,7 @@ def process_request(input_data: Dict[str, Any], oracle_mode: bool = False) -> Di
                 plan_result = None
                 quest_steps = []
                 error_msg = "Invalid quest goal - item not available for quest"
-        
+        '''
         status = "success" if plan_result is not None else "failure"
         
         return {

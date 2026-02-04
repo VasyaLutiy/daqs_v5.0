@@ -124,6 +124,21 @@
     :effect (and (not (locked ?target)))
   )
 
+  ; Разблокировка контекста (Комбо ключи)
+  (:action apply-combo-concept
+    :parameters (?a - agent ?current - context ?target - context ?c1 - concept ?c2 - concept)
+    :precondition (and 
+        (active-context ?a ?current) 
+        (connected ?current ?target) 
+        (locked ?target) 
+        (requires-combo ?target ?c1 ?c2) 
+        (has-concept ?a ?c1)
+        (has-concept ?a ?c2)
+    )
+    :effect (and (not (locked ?target)))
+  )
+  
+
   ; --- ДИНАМИЧЕСКОЕ ПОВЕДЕНИЕ (Генерируется из Persona YAML) ---
   {%- if persona is defined and persona.behavior_rules is defined %}
   {%- for rule in persona.behavior_rules %}

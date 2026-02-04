@@ -28,6 +28,7 @@ personas:
       perform_quest_analysis: true
       use_dynamic_generation: true
       oracle_interpretation: "a blinding flash of divine light and a voice like a trumpet, commanding from the Radiant Sun itself"
+      image_reference: "img_ref/img_Aric_Reference.jpg"
 
     equipment:
       weapons:
@@ -40,19 +41,23 @@ personas:
           name: "Silver Plate Armor"
           pddl_tags: ["armor", "heavy"]
           visual_fragment: "impeccably polished plate armor reflecting the ambient light"
+        - id: item_aric_helmet
+          name: "Helm of the Radiant Sun"
+          pddl_tags: ["helmet", "holy"]
+          visual_fragment: "a helmet adorned with a sun emblem, symbolizing his devotion" 
 
     behavior_rules:
-      - id: act_holy_salute
+      - id: do_act_holy_salute
         mood: neutral
         requires_holding_tag: holy
-        narrative_template: "brings the hilt of his {item_name} to his forehead in a formal salute"
+        narrative_template: "brings the hand to his forehead in a formal salute"
       
-      - id: act_divine_glow
+      - id: do_act_sun_blade_glow
         mood: righteous
         requires_holding_tag: holy
         narrative_template: "raises his {item_name}, and the steel begins to radiate a blinding white light"
 
-      - id: act_armor_clank
+      - id: do_act_armor_clank
         mood: resolute
         requires_wearing_tag: armor
         narrative_template: "stands firm, his {item_name} creaking slightly as he shifts his weight like an immovable bastion"

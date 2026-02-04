@@ -88,7 +88,7 @@ personas:
       perform_quest_analysis: true
       use_dynamic_generation: true
       oracle_interpretation: "a flicker of shadows in her peripheral vision, a cold calculation of probability"
-      image_reference: "img_ref/img_Dolores_Reference.jpg"
+      image_reference: "img_ref/img_Dolores_Reference.png"
 
     equipment:
       weapons:
@@ -283,6 +283,88 @@ personas:
   - id: persona_megan
     type: persona
     name: "Megan the Mystic"
-    description: "A high elf sorceress." 
-    contexts: []
-    triggers: []
+    description: "A high elf sorceress experimenting with dynamic reality weaving."
+    tags: ["mystic", "reactive", "high elf"]
+    properties:
+      target_social_goal: "ctx_megan_joined"
+      behavior_on_enter: "active"
+      perform_quest_analysis: true
+      use_dynamic_generation: true
+      oracle_interpretation: "a sudden distortion in the ley lines, a cold whisper from the void that bypasses her conscious mind"
+      image_reference: "img_ref/img_Megan_Reference.jpg"
+    
+    equipment:
+      clothes:
+        - id: item_star_robe
+          name: "Robe of Stars"
+          pddl_tags: ["robe", "magic"]
+          visual_fragment: "draped in a robe that seems to contain the night sky"
+      weapons:
+        - id: item_crystal_staff
+          name: "Crystal Staff"
+          pddl_tags: ["staff", "focus"]
+          visual_fragment: "clutching a staff topped with a pulsating crystal"
+
+    behavior_rules:
+      - id: act_staff_threat
+        mood: angry
+        requires_holding_tag: focus
+        narrative_template: "raises {item_name}, its crystal flaring with dangerous red light"
+      
+      - id: act_cold_stare
+        mood: angry
+        requires_empty_hands: true
+        narrative_template: "narrows eyes, the air temperature dropping noticeably"
+
+      - id: act_playful_twirl
+        mood: joyful
+        narrative_template: "twirls around, the stars on the robe leaving trails of light"
+
+      - id: act_mystic_ponder
+        mood: neutral
+        requires_holding_tag: focus
+        narrative_template: "gazes into the depths of the {item_name}, ignoring the world"
+
+    contexts:
+      - id: ctx_megan_intro
+        type: context
+        name: "Megan's Study"
+        description: "Megan stands amidst floating books."
+        connections:
+          - to: ctx_megan_angry
+            direction: forward
+          - to: ctx_megan_joy
+            direction: forward
+        properties:
+          is_start: true
+
+      - id: ctx_megan_angry
+        type: context
+        name: "Megan's Fury"
+        description: "Megan looks displeased." 
+        connections:
+          - to: ctx_megan_intro
+            direction: backward
+        properties:
+          is_locked: false 
+          induces_mood: "angry"
+
+      - id: ctx_megan_joy
+        type: context
+        name: "Megan's Delight"
+        description: "Megan smiles radiantly."
+        connections:
+          - to: ctx_megan_intro
+            direction: backward
+        properties:
+          is_locked: false
+          induces_mood: "joyful"
+
+      - id: ctx_megan_joined
+        type: context
+        name: "The Eternal Weaving"
+        description: "Your destinies are finally aligned."
+        connections: []
+        properties:
+          is_locked: true
+          required_concept: cpt_agreement

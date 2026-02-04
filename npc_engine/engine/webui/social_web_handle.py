@@ -260,6 +260,23 @@ def handle_quest_acceptance(quest_goal, quest_name):
     with st.spinner("Calculating Logistics..."):
         res = sync_world(oracle=True)
         plan = res.get("plan", [])
+    '''
+    # ALTERNATIVE: Direct call to generate plan (more control)
+    # no main fastAPI call here
+    from npc_engine.main_fast import load_world, load_player_from_json_data, execute_hook, collect_available_quests, collect_location_data, generate_plan_and_quest
+    try:
+        player, goal = load_player_from_json_data(st.session_state.player_data)
+
+        world = load_world()
+        
+        plan_result, quest_steps, error_msg = generate_plan_and_quest(world, player, goal, oracle_mode=True)
+#        npcs_nearby, exits, items_nearby = collect_location_data(world, player.current_location, goal)
+#        available_quests = collect_available_quests(world, player)
+    except Exception as e:
+        #logger.error(f"Error generating plan for quest acceptance: {e}")
+        plan_result = []
+    plan = plan_result if plan_result else []
+    '''
 
     # 4. Generate Narrative for this quest
     payload = social_llm.generate_quest_mission(st.session_state.social_state, plan, quest_name)

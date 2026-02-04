@@ -55,6 +55,8 @@ class StateManager:
             self._apply_npc_flirt(args, state)
         elif act == "apply-concept":
             self._apply_concept(args, state)
+        elif act == "apply-combo-concept":
+            self._apply_combo_concept(args, state)
         elif act.startswith("do_"):
             # V2 Dynamic Actions
             self._apply_v2_action(act, args, state)
@@ -140,6 +142,29 @@ class StateManager:
             if new_mood: state["current_mood"] = new_mood
 
         logger.info(f"StateManager: Auto-Shifted to {target}")
+
+    def _apply_combo_concept(self, args: list, state: Dict[str, Any]):
+        """Unlock/shift using two required concepts."""
+        if len(args) < 5: 
+            return
+        agent, ctx, target, c1, c2 = args[:5]
+        owned = set(state.get("concepts", []))
+        if c1 not in owned or c2 not in owned:
+            logger.warning(f"StateManager: Missing combo concepts for {target}: {c1}, {c2}")
+            return
+        if target not in state.get("unlocked_contexts", []):
+            if "unlocked_contexts" not in state: state["unlocked_contexts"] = []
+            state["unlocked_contexts"].append(target)
+        state["current_context"] = target
+        if target not in state["visited_contexts"]:
+            state["visited_contexts"].append(target)
+
+        ctx_data = self.cache.get("contexts", {}).get(target, {})
+        if ctx_data:
+            new_mood = ctx_data.get("properties", {}).get("induces_mood")
+            if new_mood: state["current_mood"] = new_mood
+
+        logger.info(f"StateManager: Combo unlock and shift to {target}")
 
     def _apply_deploy_action(self, action_type: str, args: list, state: Dict[str, Any]):
         if len(args) < 3: return

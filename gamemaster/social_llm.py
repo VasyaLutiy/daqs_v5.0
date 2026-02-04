@@ -271,6 +271,7 @@ def generate_quest_mission(state: Dict[str, Any], pddl_plan: list, quest_name: s
     """
     Generates the mission briefing narrative based on a PDDL plan.
     """
+    logger.debug(f"PDDL PLAN for Quest Mission: {pddl_plan}")
     prompt = orchestrator.assemble_quest_giver(state, pddl_plan, quest_name)
     logger.debug(f"--- QUEST MISSION PROMPT ---\n{prompt}\n--- END PROMPT ---")
     

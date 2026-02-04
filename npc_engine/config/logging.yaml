@@ -12,17 +12,17 @@ components:
     level: INFO
     file: logs/storage.log
   gamemaster:
-    level: DEBUG
+    level: INFO
     file: logs/gamemaster.log
     formatter: colored_console
   gamemaster.llm:
-    level: DEBUG
+    level: INFO
     file: logs/gamemaster.log
   gamemaster.visual:
     level: DEBUG
     file: logs/gamemaster.log
   gamemaster.state:
-    level: DEBUG
+    level: INFO
     file: logs/state_logic.log
 
 console:

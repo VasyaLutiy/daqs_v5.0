@@ -1,14 +1,14 @@
 (define (problem narrative-journey)
   (:domain narrative-flow)
   (:objects
-{% for obj in objects %}
+{% for obj in objects -%}
     {{ obj }}
-{% endfor %}
+{% endfor -%}
   )
   (:init
-{% for fact in init_facts %}
+{% for fact in init_facts -%}
     {{ fact }}
-{% endfor %}
+{% endfor -%}
   )
   (:goal
     {% if custom_goal %}

@@ -2,7 +2,9 @@
   "id": "player_001",
   "location": "tavern",
   "inventory": {
-    "items": {}
+    "items": {
+      "summoning_rune": 1
+    }
   },
   "knowledge": {
     "discovered_locations": [
@@ -14,7 +16,13 @@
       "loc_secret_lab",
       "temple_altar",
       "tavern",
-      "anc_hidden_grove"
+      "anc_hidden_grove",
+      "hidden_grove",
+      "bridge_crossing",
+      "paladin_entrance",
+      "connecting_bridge",
+      "paladin_hall",
+      "connecting_hall"
     ],
     "visited_locations": [
       "forest_entrance",
@@ -25,7 +33,13 @@
       "loc_secret_lab",
       "temple_altar",
       "tavern",
-      "anc_hidden_grove"
+      "anc_hidden_grove",
+      "hidden_grove",
+      "bridge_crossing",
+      "paladin_entrance",
+      "connecting_bridge",
+      "paladin_hall",
+      "connecting_hall"
     ]
   }
 }
