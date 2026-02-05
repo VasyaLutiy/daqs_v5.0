@@ -150,7 +150,12 @@ class CacheManager:
 
         for f in ctx_dir.glob("*.yaml"):
             try:
-                cache["contexts"][f.stem] = yaml.safe_load(f.read_text())
+                data = yaml.safe_load(f.read_text()) or {}
+                ctx_id = data.get("id", f.stem)
+                if ctx_id in cache["contexts"]:
+                    logger.info(f"CacheManager: Skipping legacy context '{ctx_id}' from {f.name} (already loaded from atlas)")
+                    continue
+                cache["contexts"][ctx_id] = data
             except Exception as e:
                 logger.error(f"Error loading context {f.name}: {e}")
 
@@ -167,7 +172,12 @@ class CacheManager:
 
         for f in t_dir.glob("*.yaml"):
             try:
-                cache["triggers"][f.stem] = yaml.safe_load(f.read_text())
+                data = yaml.safe_load(f.read_text()) or {}
+                trig_id = data.get("id", f.stem)
+                if trig_id in cache["triggers"]:
+                    logger.info(f"CacheManager: Skipping legacy trigger '{trig_id}' from {f.name} (already loaded from atlas)")
+                    continue
+                cache["triggers"][trig_id] = data
             except Exception as e:
                 logger.error(f"Error loading trigger {f.name}: {e}")
 

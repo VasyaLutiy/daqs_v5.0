@@ -145,6 +145,48 @@ To make an NPC give quests immediately (like Sir Aric):
 
 ---
 
+## 7. Quick CLI Checks (MoveValidator)
+
+Two handy one-liners to validate persona graphs without opening the UI. Run from repo root; adjust `persona`, `ctx`, `mood` as needed.
+
+**Valid moves for a persona/context/mood**
+```bash
+~/Documents/python_venv/venv312/bin/python3 - <<'PY'
+from npc_engine.engine.gamemaster.cache_manager import CacheManager
+from npc_engine.engine.gamemaster.move_validator import MoveValidator
+from pathlib import Path
+persona = "persona_sir_aric"; ctx = "ctx_aric_quest_offer"; mood = "neutral"
+cache = CacheManager(Path("npc_engine/config")).cache
+mv = MoveValidator(cache)
+state = {"current_context": ctx, "concepts": [], "unlocked_contexts": [], "active_persona": persona, "current_mood": mood}
+print(f"Persona={persona}, ctx={ctx}, mood={mood}")
+for m in mv.get_valid_moves(state):
+    print(" ", m)
+PY
+```
+
+**Quick dump of persona contexts + connections (+mood locks)**
+```bash
+~/Documents/python_venv/venv312/bin/python3 - <<'PY'
+from npc_engine.engine.gamemaster.cache_manager import CacheManager
+from pathlib import Path
+persona = "persona_sir_aric"
+cache = CacheManager(Path("npc_engine/config")).cache
+p = cache["personas"][persona]
+print(f"Contexts for {persona}:")
+for c in p.get("contexts", []):
+    cid = c["id"]; conns = ", ".join(f"{conn['direction']} -> {conn['to']}" for conn in c.get("connections", []))
+    mood = c.get("properties", {}).get("induces_mood")
+    lock = c.get("properties", {}).get("is_locked")
+    extra = []
+    if mood: extra.append(f"mood={mood}")
+    if lock: extra.append("locked")
+    print(f"- {cid}: {conns or 'no connections'}" + (f" ({', '.join(extra)})" if extra else ""))
+PY
+```
+
+---
+
 ## 7. Troubleshooting
 
 *   **"Attempted to execute unknown hook"**: You forgot to import `quest_hooks` in the frontend code.

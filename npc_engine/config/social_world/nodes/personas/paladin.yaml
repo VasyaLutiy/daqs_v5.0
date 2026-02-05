@@ -47,24 +47,24 @@ personas:
           visual_fragment: "a helmet adorned with a sun emblem, symbolizing his devotion" 
 
     behavior_rules:
-      - id: do_act_holy_salute
+      - id: act_holy_salute
         mood: neutral
         requires_holding_tag: holy
         narrative_template: "brings the hand to his forehead in a formal salute"
       
-      - id: do_act_sun_blade_glow
+      - id: act_sun_blade_glow
         mood: righteous
         requires_holding_tag: holy
         narrative_template: "raises his {item_name}, and the steel begins to radiate a blinding white light"
 
-      - id: do_act_armor_clank
+      - id: act_armor_clank
         mood: resolute
         requires_wearing_tag: armor
         narrative_template: "stands firm, his {item_name} creaking slightly as he shifts his weight like an immovable bastion"
 
     contexts:
       # --- DIRECT MISSION BRIEFING (NO PRELUDES) ---
-      - id: ctx_quest_offer
+      - id: ctx_aric_quest_offer
         type: context
         name: "Order's Command"
         description: "Sir Aric wastes no time. He slams a heavy parchment onto the temple altar, pointing a gauntleted finger at the marked locations. 'The darkness gathers. Here are the tasks the Order requires completed immediately.'"

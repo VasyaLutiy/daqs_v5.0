@@ -272,7 +272,7 @@ def render_right_column():
 
             # --- MISSION BRIEFING LOGIC ---
             current_ctx = s.get("current_context")
-            if current_ctx == "ctx_quest_offer":
+            if current_ctx == "ctx_quest_offer" or current_ctx.endswith("_quest_offer"):
                 st.info("⚡ Mission Board")
 
                 # Fetch available quests from the WORLD state
