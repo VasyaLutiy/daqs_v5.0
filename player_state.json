@@ -1,9 +1,10 @@
 {
   "id": "player_001",
-  "location": "tavern",
+  "location": "temple_hall",
   "inventory": {
     "items": {
-      "summoning_rune": 1
+      "summoning_rune": 1,
+      "portal_rune": 2
     }
   },
   "knowledge": {

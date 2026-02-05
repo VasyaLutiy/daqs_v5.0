@@ -1,0 +1,73 @@
+digraph regions {
+  rankdir=LR;
+  node [shape=box, style=rounded];
+
+  subgraph cluster_enchanted {
+    label="Enchanted Forest";
+    forest_entrance [label="forest_entrance\nAncient Oak"];
+    forest_clearing [label="forest_clearing\nForest Herb"];
+    hidden_grove [label="hidden_grove\nSummoning Rune"];
+    dark_thicket [label="dark_thicket\nShadow Guards (key)"]; 
+    tavern [label="tavern\nDolores"];
+  }
+
+  subgraph cluster_temple {
+    label="Ancient Temple";
+    ancient_temple_entrance [label="ancient_temple_entrance\nGuardian, Door"];
+    temple_hall [label="temple_hall\nSir Aric, Ancient Artifact"];
+    temple_altar [label="temple_altar\nAltar"];
+    anc_hidden_grove [label="anc_hidden_grove\nPortal to loc_fort (needs summoning_rune)"];
+    loc_secret_lab [label="loc_secret_lab\nMegan, Aetheric Prototype"];
+  }
+
+  subgraph cluster_bridge {
+    label="Mystical Bridge";
+    bridge_crossing [label="bridge_crossing\nTempleDoor Key"];
+  }
+
+  subgraph cluster_paladin {
+    label="Paladin Realm";
+    paladin_entrance [label="paladin_entrance\nSpirit of Rune, Portal Rune"];
+    connecting_bridge [label="connecting_bridge"];
+    paladin_hall [label="paladin_hall\nSpirit of Blade, Golem of Hall, Mighty Blade"];
+    connecting_hall [label="connecting_hall"];
+    paladin_chamber [label="paladin_chamber\nSpirit of Paladin, Golem of Chamber, Portal Crystal"];
+  }
+
+  subgraph cluster_epic {
+    label="Forgotten Lands";
+    loc_fort [label="loc_fort\nHeat Potion, Blacksmith"];
+    loc_peak [label="loc_peak\nPhoenix Feather (locked by Heat Potion)"];
+    loc_bridge [label="loc_bridge\nLocked by Feather"];
+    loc_citadel [label="loc_citadel (goal)"];
+  }
+
+  // Enchanted Forest connections
+  forest_entrance -> forest_clearing [dir=both];
+  forest_clearing -> hidden_grove [dir=both];
+  forest_clearing -> dark_thicket [dir=both];
+  forest_clearing -> tavern [dir=both];
+
+  // Temple connections
+  dark_thicket -> ancient_temple_entrance;
+  ancient_temple_entrance -> temple_hall;
+  temple_hall -> temple_altar;
+  temple_altar -> anc_hidden_grove [dir=both];
+  temple_hall -> loc_secret_lab [dir=both];
+
+  // Mystical bridge
+  dark_thicket -> bridge_crossing;
+  bridge_crossing -> paladin_entrance;
+
+  // Paladin realm
+  paladin_entrance -> connecting_bridge;
+  connecting_bridge -> paladin_hall;
+  paladin_hall -> connecting_hall;
+  connecting_hall -> paladin_chamber;
+
+  // Forgotten lands
+  anc_hidden_grove -> loc_fort;
+  loc_fort -> loc_peak [dir=both, label="requires Heat Potion"];
+  loc_peak -> loc_bridge [dir=both, label="requires Feather"];
+  loc_bridge -> loc_citadel [dir=both];
+}
