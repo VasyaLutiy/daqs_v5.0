@@ -18,7 +18,8 @@ locations:
     - id: temple_guardian
       type: npc
       name: Temple Guardian
-      description: A guardian protecting the temple entrance.
+      description: "Protector of the Ancient Temple."
+      personality: "Guardian stands before you, an unmoving sentinel of ancient stone. Its eyes, hollow sockets filled with swirling mist, seem to look through you"
     objects:
     - id: temple_door
       type: object

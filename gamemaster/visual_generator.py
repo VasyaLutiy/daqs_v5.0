@@ -97,21 +97,30 @@ class VisualGenerator:
             logger.warning(f"Visual: Failed to save image bytes: {e}")
             return False
 
-    def generate_location_visual(self, location_id: str, name: str, description: str, region: str = "Fantasy World") -> Optional[str]:
+    def generate_location_visual(self, location_id: str, name: str, description: str, region: str = "Fantasy World", image_ref_path: Optional[str] = None) -> Optional[str]:
         """
         Generates an image for a location if not already cached.
         Returns the path to the image file.
         """
         target_file = IMAGE_CACHE_DIR / f"{location_id}.png"
         prompt = f"""
-        Create a high-quality, atmospheric fantasy concept art image.
-        Subject: {name}
+        Create a cinematic concept art for an explorable RPG location.
+
+        LOCATION:
+        Name: {name}
         Region Style: {region}
-        Details: {description}
-        
-        Style: Detailed, cinematic lighting, digital painting, immersive.
+
+        ENVIRONMENT DETAILS:
+        {description}
+
+        VISUAL CONTINUITY:
+        - Show paths/exits described above so adjacent locations feel connected.
+        - Emphasize landmarks that help navigation (bridges, gates, statues, thickets).
+
+        STYLE:
+        Photorealistic, hyper-detailed, cinematic lighting, atmospheric, digital painting.
         """
-        return self._generate_and_save(target_file, prompt)
+        return self._generate_and_save(target_file, prompt, image_ref_path)
 
     def generate_scene_visual(self, description: str, npc_name: str, npc_desc: str, location_name: str, image_ref_path: Optional[str] = None) -> Optional[str]:
         """

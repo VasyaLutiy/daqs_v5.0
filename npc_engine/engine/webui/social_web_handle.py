@@ -4,7 +4,7 @@ from npc_engine.engine.master.pddl_orchestrator import PDDLOrchestrator
 from gamemaster import social_llm
 from gamemaster.prompt_orchestrator import orchestrator
 from gamemaster.visual_generator import VisualGenerator
-from npc_engine.main_fast import load_world
+from npc_engine.main_fast import load_world, collect_location_data
 from .social_web_libs import sync_world, save_player_state, analyze_quest_difficulty, call_world_engine
 
 def handle_npc_interaction(npc, can_quest, current_location):
@@ -161,14 +161,59 @@ def handle_navigation(eid):
             world = load_world()
             loc_node = world.get_node(eid)
             if loc_node:
+                npcs_nearby, exits, items_nearby = collect_location_data(
+                    world,
+                    eid,
+                    st.session_state.player_data.get("goal")
+                )
                 vis_gen = VisualGenerator()
+                # Enrich description with nearby NPCs, items, and exits for better visual coherence
+                detail_parts = [getattr(loc_node, 'description', 'A mysterious place.')]
+                image_ref_path = None
+                if npcs_nearby:
+                    npc_bits = []
+                    for npc in npcs_nearby:
+                        label = npc.get("name") or npc.get("id")
+                        trait_chunks = []
+                        if npc.get("description"):
+                            trait_chunks.append(npc["description"])
+                        if npc.get("personality"):
+                            trait_chunks.append(f"Personality: {npc['personality']}")
+                        if npc.get("speech_style"):
+                            trait_chunks.append(f"Speech: {npc['speech_style']}")
+                        joined = "; ".join(trait_chunks)
+                        npc_bits.append(f"{label}: {joined}" if joined else label)
+
+                        # Select first available persona image reference for visual continuity
+                        if not image_ref_path:
+                            persona_id = npc.get("social_persona")
+                            if persona_id:
+                                persona_data = orchestrator.personas_data.get(persona_id, {})
+                                image_ref = persona_data.get("properties", {}).get("image_reference")
+                                if image_ref:
+                                    candidate = Path("npc_engine/config/social_world/nodes/personas") / image_ref
+                                    image_ref_path = str(candidate)
+
+                    detail_parts.append(f"NPCs present: {', '.join(npc_bits)}.")
+                if items_nearby:
+                    item_bits = []
+                    for item in items_nearby:
+                        label = item.get("name") or item.get("id")
+                        desc = item.get("description")
+                        item_bits.append(f"{label} ({desc})" if desc else label)
+                    detail_parts.append(f"Nearby items or artifacts: {', '.join(item_bits)}.")
+                if exits:
+                    exit_bits = [ex.get("name") or ex.get("id") for ex in exits]
+                    detail_parts.append(f"Paths connect toward: {', '.join(exit_bits)}.")
+                rich_description = " ".join(detail_parts)
                 # Generate or Load from Cache
                 with st.spinner("Revealing world..."):
                     vis_gen.generate_location_visual(
                         eid,
                         getattr(loc_node, 'name', eid),
-                        getattr(loc_node, 'description', 'A mysterious place.'),
-                        getattr(loc_node, 'region', 'Fantasy World')
+                        rich_description,
+                        getattr(loc_node, 'region', 'Fantasy World'),
+                        image_ref_path=image_ref_path
                     )
         except Exception as e:
             st.warning(f"Visual generation skipped: {e}")

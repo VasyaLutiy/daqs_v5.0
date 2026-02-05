@@ -127,6 +127,7 @@ def collect_location_data(world: WorldGraph, location_id: str, goal: Optional[st
                 npcs_nearby.append({
                     "id": npc_id,
                     "name": getattr(npc_node, 'name', npc_id),
+                    "description": getattr(npc_node, 'description', ""),
                     "personality": getattr(npc_node, 'personality', ""),
                     "speech_style": getattr(npc_node, 'speech_style', ""),
                     "items": npc_node.properties.get("has_items", []),
@@ -146,20 +147,23 @@ def collect_location_data(world: WorldGraph, location_id: str, goal: Optional[st
                     "name": getattr(target_node, 'name', target_id)
                 })
         
-        # Collect Items only if they are the goal
+        goal_item_id = None
         if goal and goal.startswith("(has-item"):
             import re
             match = re.search(r'\(has-item\s+\w+\s+(\w+)\)', goal)
             if match:
                 goal_item_id = match.group(1)
-                for item_id in current_loc_node.contained_items:
-                    if item_id == goal_item_id:
-                        item_node = world.get_node(item_id)
-                        if item_node:
-                            items_nearby.append({
-                                "id": item_id,
-                                "name": getattr(item_node, 'name', item_id)
-                            })
+
+        # Collect Items
+        for item_id in current_loc_node.contained_items:
+            item_node = world.get_node(item_id)
+            if item_node:
+                items_nearby.append({
+                    "id": item_id,
+                    "name": getattr(item_node, 'name', item_id),
+                    "description": getattr(item_node, 'description', ""),
+                    "is_goal_item": item_id == goal_item_id
+                })
     
     return npcs_nearby, exits, items_nearby
 
