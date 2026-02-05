@@ -99,26 +99,33 @@ def handle_npc_interaction(npc, can_quest, current_location):
                 p_data = orchestrator.personas_data.get(persona_id, {})
                 p_desc = p_data.get("description", "A mysterious figure.")
                 
+                # Need location name, not ID. Try world cache or orchestrator lookup?
+                # Quickest way: Use orchestrator instance we already have
+                loc_id = st.session_state.social_state["current_location"]
+                loc_data = orchestrator.locations_data.get(loc_id, {})
+                loc_name = loc_data.get("name", loc_id)
+
                 # Resolve Image Reference Path
                 image_ref = p_data.get("properties", {}).get("image_reference")
                 image_ref_path = None
                 if image_ref:
                     image_ref_path = str(Path("npc_engine/config/social_world/nodes/personas") / image_ref)
                 
-                # Need location name, not ID. Try world cache or orchestrator lookup?
-                # Quickest way: Use orchestrator instance we already have
-                loc_id = st.session_state.social_state["current_location"]
-                loc_data = orchestrator.locations_data.get(loc_id, {})
-                loc_name = loc_data.get("name", loc_id)
+                # Resolve Location Reference Path (cached location image) for visual continuity
+                location_ref_path = None
+                cached_loc = Path("static/images/locations") / f"{loc_id}.png"
+                if cached_loc.exists():
+                    location_ref_path = str(cached_loc)
                 
                 with st.spinner("Visualizing scene..."):
                     img_path = vis_gen.generate_scene_visual(
                         intro["scene_description"], 
                         p_name, 
-                        p_desc, 
-                        loc_name, 
-                        image_ref_path=image_ref_path
-                    )
+                            p_desc, 
+                            loc_name, 
+                            image_ref_path=image_ref_path,
+                            location_ref_path=location_ref_path
+                        )
             except Exception as e:
                 print(f"CRITICAL VISUAL ERROR: {e}") # Print to console to survive rerun
                 st.error(f"Visual gen failed. Ref: {image_ref_path}. Error: {e}")
@@ -465,6 +472,10 @@ def handle_input(prompt):
                     loc_id = state.get("current_location", "unknown")
                     loc_data = orchestrator.locations_data.get(loc_id, {})
                     loc_name = loc_data.get("name", loc_id)
+                    location_ref_path = None
+                    cached_loc = Path("static/images/locations") / f"{loc_id}.png"
+                    if cached_loc.exists():
+                        location_ref_path = str(cached_loc)
                     
                     with st.spinner("Visualizing scene..."):
                         img_path = vis_gen.generate_scene_visual(
@@ -472,7 +483,8 @@ def handle_input(prompt):
                             p_name, 
                             p_desc, 
                             loc_name,
-                            image_ref_path=image_ref_path
+                            image_ref_path=image_ref_path,
+                            location_ref_path=location_ref_path
                         )
                 except Exception as e:
                     st.error(f"Visual gen failed. Ref: {image_ref_path}. Error: {e}")

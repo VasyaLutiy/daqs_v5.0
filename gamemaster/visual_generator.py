@@ -120,9 +120,10 @@ class VisualGenerator:
         STYLE:
         Photorealistic, hyper-detailed, cinematic lighting, atmospheric, digital painting.
         """
-        return self._generate_and_save(target_file, prompt, image_ref_path)
+        ref_paths = [image_ref_path] if image_ref_path else None
+        return self._generate_and_save(target_file, prompt, ref_paths)
 
-    def generate_scene_visual(self, description: str, npc_name: str, npc_desc: str, location_name: str, image_ref_path: Optional[str] = None) -> Optional[str]:
+    def generate_scene_visual(self, description: str, npc_name: str, npc_desc: str, location_name: str, image_ref_path: Optional[str] = None, location_ref_path: Optional[str] = None) -> Optional[str]:
         """
         Generates a visual for a specific dialogue scene/moment.
         Can use an optional image_ref_path for character consistency.
@@ -151,10 +152,15 @@ class VisualGenerator:
         
         Style: Photorealistic, hyper-realistic, ultra-detailed, cinematic realism, dramatic lighting with deep shadows and volumetric god rays, 8K resolution, sharp focus, highly intricate details, realistic textures, lifelike skin and materials, focus on expressive character faces and dynamic action poses, in the style of hyperrealistic digital art, octane render, unreal engine 5
         """
-        
-        return self._generate_and_save(target_file, prompt, image_ref_path)
+        ref_paths = []
+        if image_ref_path:
+            ref_paths.append(image_ref_path)
+        if location_ref_path:
+            ref_paths.append(location_ref_path)
 
-    def _generate_and_save(self, target_file: Path, prompt: str, image_ref_path: Optional[str] = None) -> Optional[str]:
+        return self._generate_and_save(target_file, prompt, ref_paths or None)
+
+    def _generate_and_save(self, target_file: Path, prompt: str, image_ref_paths: Optional[List[str]] = None) -> Optional[str]:
         """Internal helper to handle API call and saving."""
         # 1. Check Cache
         if target_file.exists():
@@ -169,26 +175,29 @@ class VisualGenerator:
 
         # 2. Prepare Contents
         contents: List[Union[str, Image.Image]] = [prompt]
-        if image_ref_path:
-            try:
-                ref_path = Path(image_ref_path)
-                # Fallback extension swap if missing
-                if not ref_path.exists() and ref_path.suffix.lower() in [".jpg", ".jpeg"]:
-                    alt = ref_path.with_suffix(".png")
-                    if alt.exists():
-                        ref_path = alt
-                elif not ref_path.exists() and ref_path.suffix.lower() == ".png":
-                    alt = ref_path.with_suffix(".jpg")
-                    if alt.exists():
-                        ref_path = alt
+        if image_ref_paths:
+            for path_str in image_ref_paths:
+                if not path_str:
+                    continue
+                try:
+                    ref_path = Path(path_str)
+                    # Fallback extension swap if missing
+                    if not ref_path.exists() and ref_path.suffix.lower() in [".jpg", ".jpeg"]:
+                        alt = ref_path.with_suffix(".png")
+                        if alt.exists():
+                            ref_path = alt
+                    elif not ref_path.exists() and ref_path.suffix.lower() == ".png":
+                        alt = ref_path.with_suffix(".jpg")
+                        if alt.exists():
+                            ref_path = alt
 
-                if ref_path.exists():
-                    logger.info(f"Visual: Using image reference from {ref_path}")
-                    contents.append(Image.open(ref_path))
-                else:
-                    logger.warning(f"Visual: Image reference path not found: {image_ref_path}")
-            except Exception as e:
-                logger.error(f"Visual: Failed to load image reference: {e}")
+                    if ref_path.exists():
+                        logger.info(f"Visual: Using image reference from {ref_path}")
+                        contents.append(Image.open(ref_path))
+                    else:
+                        logger.warning(f"Visual: Image reference path not found: {path_str}")
+                except Exception as e:
+                    logger.error(f"Visual: Failed to load image reference: {e}")
 
         # 3. Generate
         logger.info(f"Visual: Generating image for {target_file.name}...")
