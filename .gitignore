@@ -38,3 +38,6 @@ htmlcov/
 # Logs and temp files
 *.log
 *.tmp
+
+# static image generated
+static/
