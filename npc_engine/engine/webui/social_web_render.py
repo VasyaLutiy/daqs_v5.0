@@ -116,8 +116,10 @@ def render_sidebar():
             except Exception as e:
                 st.caption(f"Mind map unavailable: {str(e)}")
 
-            st.caption(f"Context: {s['current_context']}")
-            st.caption(f"Concepts: {len(s['concepts'])}")
+            current_ctx = s.get("current_context", "unknown")
+            concepts = s.get("concepts", []) or []
+            st.caption(f"Context: {current_ctx}")
+            st.caption(f"Concepts: {len(concepts)}" + (f" | {', '.join(concepts)}" if concepts else ""))
 
 def render_right_column():
     """
