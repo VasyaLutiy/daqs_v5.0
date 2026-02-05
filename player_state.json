@@ -1,6 +1,6 @@
 {
   "id": "player_001",
-  "location": "paladin_hall",
+  "location": "forest_clearing",
   "inventory": {
     "items": {
       "summoning_rune": 1,
@@ -23,7 +23,8 @@
       "paladin_entrance",
       "connecting_bridge",
       "paladin_hall",
-      "connecting_hall"
+      "connecting_hall",
+      "paladin_chamber"
     ],
     "visited_locations": [
       "forest_entrance",
@@ -40,7 +41,8 @@
       "paladin_entrance",
       "connecting_bridge",
       "paladin_hall",
-      "connecting_hall"
+      "connecting_hall",
+      "paladin_chamber"
     ]
   }
 }
