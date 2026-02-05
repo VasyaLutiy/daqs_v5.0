@@ -1,9 +1,0 @@
-id: ctx_identity
-type: context
-name: "The Core Identity"
-description: "A moment of vulnerability about lost memories, emotional pain, or the origin of the 'soul'. Use this ONLY for deep emotional questions about 'Who are you?'."
-connections:
-  - to: ctx_deep
-    direction: bidirectional
-properties:
-  is_locked: false

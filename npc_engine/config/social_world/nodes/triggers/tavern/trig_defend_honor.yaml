@@ -1,6 +1,0 @@
-id: trig_defend_honor
-type: trigger
-name: "Defend Honor"
-description: "Show her you're not a pushover."
-parent_context: ctx_mockery
-yields: cpt_respect

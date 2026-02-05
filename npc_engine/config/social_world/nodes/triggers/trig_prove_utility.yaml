@@ -1,6 +1,0 @@
-id: trig_prove_utility
-type: trigger
-name: "Prove Utility"
-description: "Explaining how your skills can benefit the system."
-parent_context: ctx_deep_quest
-yields: cpt_trust

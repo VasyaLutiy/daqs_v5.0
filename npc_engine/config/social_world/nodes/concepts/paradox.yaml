@@ -1,4 +1,0 @@
-id: cpt_paradox
-type: concept
-name: " The Liar's Paradox"
-content: "The statement: 'This sentence is false.' If true, it is false. If false, it is true. An infinite recursive loop."
