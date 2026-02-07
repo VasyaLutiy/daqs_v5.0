@@ -109,6 +109,3 @@ locations:
     - id: npc_dolores
       type: npc
       dialogue_quest: true
-      social_persona: persona_dolores
-      properties:
-          has_items: ["item_shadow_sword", "item_soul_dagger", "item_runic_leather"]

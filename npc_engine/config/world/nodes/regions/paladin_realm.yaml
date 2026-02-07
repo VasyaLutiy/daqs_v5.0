@@ -59,9 +59,17 @@ locations:
     edge_type: path
   - to: paladin_chamber
     edge_type: path
-  contained_items: []
   contained_npcs: []
   contained_objects: []
+  contained_items: []
+  contains:
+    items:
+    - id: item_shadow_coin
+      type: item
+      name: "Black Iron Coin"
+      description: "A heavy coin made of black iron, etched with mysterious symbols."
+      properties:
+        pddl_tags: ["token", "shadow"]
 - id: paladin_chamber
   type: location
   name: Paladin Chamber

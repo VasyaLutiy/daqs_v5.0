@@ -60,8 +60,23 @@ class GraphRenderer:
             # Fallback: show everything if no persona active
             relevant_contexts = all_contexts
 
-        # Render filtered nodes
+        # Render filtered nodes (skip unreachable locked nodes unless current/target/visited)
+        concepts = set(state.get("concepts", []))
         for ctx_id, ctx_data in relevant_contexts.items():
+            props = ctx_data.get("properties", {})
+            requires = props.get("required_concept")
+            combo = props.get("required_combo")
+            locked = props.get("is_locked", False) and ctx_id not in unlocked_list
+            unreachable = False
+            if locked:
+                if requires and requires not in concepts:
+                    unreachable = True
+                if combo and not all(c in concepts for c in combo):
+                    unreachable = True
+
+            if unreachable and ctx_id not in {current_ctx, target_goal} and ctx_id not in visited_list:
+                continue
+
             self._render_context_node(dot, ctx_id, ctx_data, current_ctx,
                                     target_goal, unlocked_list, visited_list)
 
@@ -148,7 +163,8 @@ class GraphRenderer:
             visited_list (list): List of visited context IDs
         """
         try:
-            label = ctx_data.get('name', ctx_id)
+            base_label = ctx_data.get('name') or ctx_id.replace('_', ' ').title()
+            label = base_label
             fillcolor = '#ffffff'
             penwidth = '1'
             color = '#000000'
@@ -156,18 +172,22 @@ class GraphRenderer:
             # Determine styling based on state
             is_locked = ctx_data.get('properties', {}).get('is_locked', False)
 
-            if is_locked and ctx_id not in unlocked_list:
-                label = f"🔒 {label}"
+            if ctx_id == target_goal:
+                if is_locked and ctx_id not in unlocked_list:
+                    label = f"⭐🔒 {base_label}"
+                else:
+                    label = f"⭐ {base_label}"
+                fillcolor = '#ffffcc'
+                penwidth = '2'
+                color = '#ccaa00'
+            elif is_locked and ctx_id not in unlocked_list:
+                label = f"🔒 {base_label}"
                 fillcolor = '#eeeeee'
                 color = '#999999'
             elif ctx_id == current_ctx:
                 fillcolor = '#ffcccc'
                 penwidth = '2'
                 color = '#cc0000'
-            elif ctx_id == target_goal:
-                label = f"⭐ {label}"
-                fillcolor = '#ffffcc'
-                penwidth = '2'
             elif ctx_id in visited_list:
                 fillcolor = '#e0e0e0'
 

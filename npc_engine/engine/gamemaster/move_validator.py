@@ -84,7 +84,7 @@ class MoveValidator:
         moves.extend(self._generate_context_shifts(agent, current_context, context_data, unlocked_contexts, owned_concepts))
         moves.extend(self._generate_concept_learning(agent, current_context, context_data, owned_concepts))
 
-        moves.extend(self._generate_trigger_activations(agent, current_context, owned_concepts, p_tags))
+        moves.extend(self._generate_trigger_activations(agent, current_context, owned_concepts, p_tags, state))
         moves.extend(self._generate_npc_actions(state, owned_concepts, p_tags))
 
         # New: V2 Dynamic Behavior Rules
@@ -238,7 +238,7 @@ class MoveValidator:
         return moves
 
     def _generate_trigger_activations(self, agent: str, current_context: str,
-                                     owned_concepts: List[str], persona_tags: List[str]) -> List[str]:
+                                     owned_concepts: List[str], persona_tags: List[str], state: Dict[str, Any]) -> List[str]:
         """
         Generate trigger activation moves.
 
@@ -266,6 +266,20 @@ class MoveValidator:
                 req_tag = t_data.get("required_tag")
                 if req_tag and req_tag not in persona_tags:
                     continue
+
+                # Optional: require player to hold a specific item ID
+                req_item = t_data.get("requires_item")
+                if req_item:
+                    inventory = state.get("player_data", {}).get("inventory", {}).get("items", {})
+                    if req_item not in inventory:
+                        continue
+
+                # Optional: require player to explicitly share an item (set via UI)
+                req_shared = t_data.get("properties", {}).get("requires_shared_items", [])
+                if req_shared:
+                    shared_items = set(state.get("shared_items", []))
+                    if not all(item in shared_items for item in req_shared):
+                        continue
 
                 # Check if yields not already owned
                 yields = t_data.get("yields", "unknown_concept")

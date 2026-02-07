@@ -79,6 +79,38 @@ def render_sidebar():
         if inventory:
             for item_id, count in inventory.items():
                 st.write(f"- {item_id.replace('_', ' ').title()}: {count}")
+
+            # Context-aware share action (e.g., for Dolores shadow deal)
+            if st.session_state.game_mode == "SOCIAL":
+                concepts = set(st.session_state.social_state.get("concepts", []))
+                has_shadow_keys = "cpt_shadow_rumor" in concepts and "cpt_shadow_token" in concepts
+                has_coin = inventory.get("item_shadow_coin", 0) > 0
+                current_ctx = st.session_state.social_state.get("current_context")
+                exhausted = set(st.session_state.social_state.get("exhausted_triggers", []))
+                # Allow offering coin once rumor is known and coin is present; auto-fire trig_find_coin if applicable
+                if "cpt_shadow_rumor" in concepts and has_coin and "trig_find_coin" not in exhausted:
+                    allowed_contexts = {"ctx_neutral_talk", "ctx_shadow_entry", "ctx_shadow_deal"}
+                    if current_ctx in allowed_contexts and st.button("🤝 Share Black Iron Coin", key="share_shadow_coin"):
+                        state = st.session_state.social_state
+                        action = f"activate-trigger player {current_ctx} trig_find_coin cpt_shadow_token"
+                        st.session_state.engine.apply_action(action, state)
+                        # If both keys are now present, auto-apply combo to enter shadow_entry
+                        concepts_now = set(state.get("concepts", []))
+                        if "cpt_shadow_rumor" in concepts_now and "cpt_shadow_token" in concepts_now:
+                            combo_action = "apply-combo-concept player ctx_neutral_talk ctx_shadow_entry cpt_shadow_rumor cpt_shadow_token"
+                            st.session_state.engine.apply_action(combo_action, state)
+                            state["current_context"] = "ctx_shadow_entry"
+                            state.setdefault("visited_contexts", []).append("ctx_shadow_entry")
+                        st.session_state.social_state = state
+                        # Add immediate narrative acknowledgement
+                        msg = {
+                            "role": "assistant",
+                            "content": "Dolores takes the Black Iron Coin, eyes narrowing as the room seems to dim. \"Alright, shadows it is.\""
+                        }
+                        st.session_state.social_messages = st.session_state.social_messages if "social_messages" in st.session_state else []
+                        st.session_state.social_messages.append(msg)
+                        st.success("You offer the Black Iron Coin.")
+                        st.rerun()
         else:
             st.caption("Empty")
 
@@ -109,7 +141,7 @@ def render_sidebar():
                 persona_id = s.get("active_persona", "persona_cyber")
                 pddl_orch = PDDLOrchestrator()
                 meta = pddl_orch.get_persona_metadata(persona_id)
-                target_goal = meta.get("target_goal", "ctx_core")
+                target_goal = s.get("target_goal") or meta.get("target_goal", "ctx_core")
 
                 graph = engine.render_graph(s, target_goal)
                 st.graphviz_chart(graph)
@@ -260,7 +292,7 @@ def render_right_column():
                 persona_id = s.get("active_persona", "persona_cyber")
                 pddl_orch = PDDLOrchestrator()
                 meta = pddl_orch.get_persona_metadata(persona_id)
-                target_goal = meta.get("target_goal", "ctx_core")
+                target_goal = s.get("target_goal") or meta.get("target_goal", "ctx_core")
 
                 graph = engine.render_graph(s, target_goal)
                 st.graphviz_chart(graph)

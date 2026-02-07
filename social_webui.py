@@ -84,6 +84,7 @@ def init_session_state():
             "visited_contexts": ["ctx_intro"],
             "unlocked_contexts": [],
             "exhausted_triggers": [],
+            "shared_items": [],
             "rapport": False,
             "known_facts": []
         }

@@ -1,48 +1,43 @@
 {
   "id": "player_001",
-  "location": "temple_hall",
+  "location": "tavern",
   "inventory": {
     "items": {
-      "summoning_rune": 1,
-      "portal_rune": 2
+      "item_shadow_coin": 1,
+      "mighty_blade": 1
     }
   },
   "knowledge": {
     "discovered_locations": [
-      "forest_entrance",
+      "tavern",
       "forest_clearing",
+      "hidden_grove",
+      "forest_entrance",
       "dark_thicket",
       "ancient_temple_entrance",
       "temple_hall",
-      "loc_secret_lab",
       "temple_altar",
-      "tavern",
       "anc_hidden_grove",
-      "hidden_grove",
       "bridge_crossing",
       "paladin_entrance",
       "connecting_bridge",
-      "paladin_hall",
-      "connecting_hall",
-      "paladin_chamber"
+      "paladin_hall"
     ],
     "visited_locations": [
-      "forest_entrance",
+      "tavern",
       "forest_clearing",
+      "hidden_grove",
+      "forest_entrance",
       "dark_thicket",
       "ancient_temple_entrance",
       "temple_hall",
-      "loc_secret_lab",
       "temple_altar",
-      "tavern",
       "anc_hidden_grove",
-      "hidden_grove",
       "bridge_crossing",
       "paladin_entrance",
       "connecting_bridge",
-      "paladin_hall",
-      "connecting_hall",
-      "paladin_chamber"
+      "paladin_hall"
     ]
-  }
+  },
+  "goal": "(has-item player_001 cpt_feather)"
 }

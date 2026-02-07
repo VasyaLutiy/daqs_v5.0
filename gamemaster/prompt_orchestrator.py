@@ -271,6 +271,7 @@ class PromptOrchestrator:
         return template.format(
             context=f"{ctx_details['name']} ({ctx_details['desc']})",
             concepts=self._format_concepts(state.get('known_facts', [])),
+            shared_items=", ".join(state.get("shared_items", [])) if state.get("shared_items") else "none",
             persona_name=p_data.get('name', 'Unknown'),
             persona_desc=p_data.get('description', 'No desc'),
             valid_moves="\n".join(formatted_moves),

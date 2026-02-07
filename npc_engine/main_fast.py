@@ -234,15 +234,6 @@ def process_request(input_data: Dict[str, Any], oracle_mode: bool = False) -> Di
         npcs_nearby, exits, items_nearby = collect_location_data(world, player.current_location, goal)
         available_quests = collect_available_quests(world, player)
         
-        '''# Validate goal
-        if goal and goal.startswith("(has-item"):
-            item_id = goal.split()[2]
-            quest_ids = [q["id"] for q in available_quests]
-            if item_id not in quest_ids:
-                plan_result = None
-                quest_steps = []
-                error_msg = "Invalid quest goal - item not available for quest"
-        '''
         status = "success" if plan_result is not None else "failure"
         
         return {

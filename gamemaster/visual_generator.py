@@ -13,7 +13,7 @@ logger = get_logger("gamemaster.visual")
 
 # Constants
 IMAGE_CACHE_DIR = Path("static/images/locations")
-DEFAULT_MODEL = "gemini-3-pro-image-preview"
+DEFAULT_MODEL = "gemini-2.5-flash-image"
 
 class VisualGenerator:
     def __init__(self):
@@ -143,6 +143,7 @@ class VisualGenerator:
         CHARACTER:
         Name: {npc_name}
         Appearance: {npc_desc}
+        Single Character Rule: Show only one instance of {npc_name}. Do not duplicate or mirror the character even if reference images include them. No extra people.
         
         LOCATION:
         Name: {location_name}
@@ -150,6 +151,8 @@ class VisualGenerator:
         SCENE ACTION/ATMOSPHERE:
         {description}
         
+        Reference Usage: Use character reference for likeness; use location reference only for environment. If any reference already contains the character, still depict a single instance of {npc_name}.
+
         Style: Photorealistic, hyper-realistic, ultra-detailed, cinematic realism, dramatic lighting with deep shadows and volumetric god rays, 8K resolution, sharp focus, highly intricate details, realistic textures, lifelike skin and materials, focus on expressive character faces and dynamic action poses, in the style of hyperrealistic digital art, octane render, unreal engine 5
         """
         ref_paths = []

@@ -104,6 +104,17 @@ class StateManager:
         if trigger not in state.get("exhausted_triggers", []):
             if "exhausted_triggers" not in state: state["exhausted_triggers"] = []
             state["exhausted_triggers"].append(trigger)
+
+        # Optional: mark shared items from trigger properties (e.g., presenting an item)
+        trig_data = self.cache.get("triggers", {}).get(trigger, {})
+        trig_props = trig_data.get("properties", {}) if isinstance(trig_data, dict) else {}
+        provides_shared = trig_props.get("provides_shared_items", [])
+        if provides_shared:
+            shared = state.setdefault("shared_items", [])
+            for item_id in provides_shared:
+                if item_id not in shared:
+                    shared.append(item_id)
+
         if concept not in state["concepts"]:
             state["concepts"].append(concept)
             if "known_facts" in state: state["known_facts"].append(concept)

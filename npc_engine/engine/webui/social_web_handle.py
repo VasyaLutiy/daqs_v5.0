@@ -31,6 +31,7 @@ def handle_npc_interaction(npc, can_quest, current_location):
     properties = meta.get("properties", {})
     start_ctx = meta.get("start_context", "ctx_intro")
     target_goal = meta.get("target_goal", "ctx_core")
+    contexts_map = meta.get("contexts", {})
 
     # 3. State Reset Logic
     current_persona = st.session_state.social_state.get("active_persona")
@@ -44,6 +45,7 @@ def handle_npc_interaction(npc, can_quest, current_location):
             "visited_contexts": [start_ctx],
             "unlocked_contexts": [],
             "exhausted_triggers": [],
+            "shared_items": [],
             "rapport": False,
             "known_facts": []
         }
@@ -52,6 +54,10 @@ def handle_npc_interaction(npc, can_quest, current_location):
     st.session_state.social_state["active_persona"] = persona_id
     st.session_state.social_state["current_context"] = start_ctx
     st.session_state.social_state["current_location"] = current_location # Ensure update even if persona didn't change
+    # Track current target goal so we can switch later without reloading persona
+    st.session_state.social_state["target_goal"] = meta.get("target_goal", "ctx_core")
+    # Keep shared_items if already present, otherwise initialize
+    st.session_state.social_state.setdefault("shared_items", [])
     
     # FORCE UPDATE LOCATION (Fixes 'unknown' location issue)
     st.session_state.social_state["current_location"] = st.session_state.player_data.get("location", "unknown")
@@ -70,8 +76,31 @@ def handle_npc_interaction(npc, can_quest, current_location):
                  st.write(f"Debug: Added quest concept: {quest_concept}")
 
     # 5. Behavior: Introduction
+    target_goal_state = st.session_state.social_state.get("target_goal", target_goal)
+    # If start goal is locked by missing concept, pick an alternate reachable neighbor to avoid impossible first step
+    def _is_reachable(ctx_id: str) -> bool:
+        ctx = contexts_map.get(ctx_id, {})
+        props = ctx.get("properties", {})
+        req = props.get("required_concept")
+        if req and req not in st.session_state.social_state.get("concepts", []):
+            return False
+        combo = props.get("required_combo")
+        if combo and not all(c in st.session_state.social_state.get("concepts", []) for c in combo):
+            return False
+        return True
+
+    if not _is_reachable(target_goal_state):
+        start_ctx_data = contexts_map.get(start_ctx, {})
+        for conn in start_ctx_data.get("connections", []):
+            cand = conn.get("to")
+            if cand and _is_reachable(cand):
+                target_goal_state = cand
+                st.session_state.social_state["target_goal"] = cand
+                print(f"[GOAL SWITCH] Adjusted initial goal to reachable context -> {cand}")
+                break
+
     oracle_res = st.session_state.engine.get_path_requirements(
-        start_ctx, target_goal, map_key="contexts", state=st.session_state.social_state
+        start_ctx, target_goal_state, map_key="contexts", state=st.session_state.social_state
     )
     quest_keys = oracle_res[0] if oracle_res else []
 
@@ -407,87 +436,129 @@ def handle_input(prompt):
         with st.spinner("Processing Logic..."):
             engine = st.session_state.engine
             state = st.session_state.social_state.copy()  # Make a copy to avoid modifying original
+            # Preserve shared items explicitly (copy() may omit if not present)
+            state.setdefault("shared_items", st.session_state.social_state.get("shared_items", []))
+            print(f"[DEBUG shared_items] start copy -> state:{state.get('shared_items')} session:{st.session_state.social_state.get('shared_items')}")
             
             # ENSURE LOCATION IS ALWAYS UP TO DATE
             state["current_location"] = st.session_state.player_data.get("location", "unknown")
             state["player_data"] = st.session_state.player_data  # Add player data for NPC logic
 
+            # DYNAMIC GOAL: ensure target_goal present
+            if "target_goal" not in state:
+                state["target_goal"] = st.session_state.social_state.get("target_goal", None)
+
             # 1. Intent
             valid_moves = engine.get_valid_moves(state)
+            # Prevent NLU from selecting NPC-initiated actions; those are handled separately
+            filtered_moves = [m for m in valid_moves if not m.startswith(("npc-offer", "npc-flirt"))]
             adapter = {
                 "current_topic": state["current_context"],
                 "active_persona": state["active_persona"],
                 "current_mood": state.get("current_mood", "neutral"),
                 "current_location": st.session_state.player_data.get("location", "unknown"), # FIX: Pass location to adapter
                 "rapport": False,
-                "known_facts": state["concepts"]
+                "known_facts": state["concepts"],
+                "shared_items": state.get("shared_items", []),
             }
 
-            pddl_action = social_llm.get_social_intent(prompt, adapter, valid_moves)
+            pddl_action = social_llm.get_social_intent(prompt, adapter, filtered_moves)
+            # Drop hallucinated actions not present in valid_moves
+            if pddl_action and pddl_action not in valid_moves and pddl_action != "None":
+                print(f"[NLU FILTER] Dropping invalid action '{pddl_action}' (not in valid_moves)")
+                pddl_action = None
+
+            # Extra guard: drop npc-offer/npc-flirt that are not defined triggers
+            if pddl_action and pddl_action.startswith(("npc-offer", "npc-flirt")):
+                parts = pddl_action.split()
+                trig_id = parts[2] if len(parts) >= 3 else None  # format: npc-offer player ctx trig_id concept
+                known_triggers = set(st.session_state.engine.cache.get("triggers", {}).keys())
+                if not trig_id or trig_id not in known_triggers:
+                    print(f"[NLU FILTER] Dropping NPC action '{pddl_action}' (unknown trigger)")
+                    pddl_action = None
 
             # 2. Apply
             if pddl_action and pddl_action != "None":
                 engine.apply_action(pddl_action, state)
+                print(f"[DEBUG shared_items] after apply '{pddl_action}' -> state:{state.get('shared_items')} session-before-sync:{st.session_state.social_state.get('shared_items')}")
                 # CRITICAL: Sync state back to session_state
                 st.session_state.social_state = state
-
-            # 3. Narrative
-            # Recalculate adapter after state change
-            adapter["current_topic"] = state["current_context"]
-            adapter["current_mood"] = state.get("current_mood", "neutral")
-            adapter["current_location"] = st.session_state.player_data.get("location", "unknown") # Update location too
-
-            # Priority Logic & V2 Integration
-            if pddl_action and pddl_action.startswith("do_"):
-                # V2 DYNAMIC GENERATION
-                narrative_fragment = orchestrator.translate_plan_to_narrative([pddl_action], state["active_persona"])
-                effective_action = f"visual {narrative_fragment}"
-            else:
-                effective_action = "start" if not prompt.strip() else "talk"
-                if pddl_action and pddl_action != "None":
-                    if any(x in pddl_action for x in ["deploy", "activate", "learn", "apply"]):
-                        effective_action = pddl_action
-                    elif "shift-context" in pddl_action:
-                        effective_action = pddl_action
-
-            payload = social_llm.generate_social_narrative(effective_action, adapter, prompt)
-            
-            # VISUAL GENERATION FOR RESPONSE
-            img_path = None
-            if st.session_state.get("visual_enabled", False) and "scene_description" in payload:
+                print(f"[DEBUG shared_items] synced session -> {st.session_state.social_state.get('shared_items')}")
+                
+            # DYNAMIC GOAL UPGRADE: use context hint if provided
+            ctx_props = st.session_state.engine.cache.get("contexts", {}).get(state.get("current_context", ""), {}).get("properties", {})
+            ctx_hint_goal = ctx_props.get("target_goal_hint")
+            if ctx_hint_goal:
+                st.session_state.social_state["target_goal"] = ctx_hint_goal
+                print(f"[GOAL SWITCH] Context hint updated target_goal -> {ctx_hint_goal}")
+                # Re-run planner for logging/debug with updated goal
                 try:
-                    vis_gen = VisualGenerator()
-                    # Resolve names
-                    persona_id = state["active_persona"]
-                    p_data = orchestrator.personas_data.get(persona_id, {})
-                    p_name = p_data.get("name", persona_id)
-                    p_desc = p_data.get("description", "A mysterious figure.") # Get Description
-                    
-                    # Resolve Image Reference Path
-                    image_ref = p_data.get("properties", {}).get("image_reference")
-                    image_ref_path = None
-                    if image_ref:
-                        image_ref_path = str(Path("npc_engine/config/social_world/nodes/personas") / image_ref)
-
-                    loc_id = state.get("current_location", "unknown")
-                    loc_data = orchestrator.locations_data.get(loc_id, {})
-                    loc_name = loc_data.get("name", loc_id)
-                    location_ref_path = None
-                    cached_loc = Path("static/images/locations") / f"{loc_id}.png"
-                    if cached_loc.exists():
-                        location_ref_path = str(cached_loc)
-                    
-                    with st.spinner("Visualizing scene..."):
-                        img_path = vis_gen.generate_scene_visual(
-                            payload["scene_description"], 
-                            p_name, 
-                            p_desc, 
-                            loc_name,
-                            image_ref_path=image_ref_path,
-                            location_ref_path=location_ref_path
-                        )
+                    st.session_state.engine.get_path_requirements(
+                        state.get("current_context"),
+                        ctx_hint_goal,
+                        map_key="contexts",
+                        state=st.session_state.social_state
+                    )
                 except Exception as e:
-                    st.error(f"Visual gen failed. Ref: {image_ref_path}. Error: {e}")
+                    print(f"[GOAL SWITCH] Replan failed: {e}")
 
-            messages.append({"role": "assistant", "content": payload, "image": img_path})
-            st.rerun()
+        # 3. Narrative
+        # Recalculate adapter after state change
+        adapter["current_topic"] = state["current_context"]
+        adapter["current_mood"] = state.get("current_mood", "neutral")
+        adapter["current_location"] = st.session_state.player_data.get("location", "unknown") # Update location too
+
+        # Priority Logic & V2 Integration   
+        if pddl_action and pddl_action.startswith("do_"):
+            # V2 DYNAMIC GENERATION
+            narrative_fragment = orchestrator.translate_plan_to_narrative([pddl_action], state["active_persona"])
+            effective_action = f"visual {narrative_fragment}"
+        else:
+            effective_action = "start" if not prompt.strip() else "talk"
+            if pddl_action and pddl_action != "None":
+                if any(x in pddl_action for x in ["deploy", "activate", "learn", "apply"]):
+                    effective_action = pddl_action
+                elif "shift-context" in pddl_action:
+                    effective_action = pddl_action
+
+        payload = social_llm.generate_social_narrative(effective_action, adapter, prompt)
+        
+        # VISUAL GENERATION FOR RESPONSE
+        img_path = None
+        if st.session_state.get("visual_enabled", False) and "scene_description" in payload:
+            try:
+                vis_gen = VisualGenerator()
+                # Resolve names
+                persona_id = state["active_persona"]
+                p_data = orchestrator.personas_data.get(persona_id, {})
+                p_name = p_data.get("name", persona_id)
+                p_desc = p_data.get("description", "A mysterious figure.") # Get Description
+                
+                # Resolve Image Reference Path
+                image_ref = p_data.get("properties", {}).get("image_reference")
+                image_ref_path = None
+                if image_ref:
+                    image_ref_path = str(Path("npc_engine/config/social_world/nodes/personas") / image_ref)
+
+                loc_id = state.get("current_location", "unknown")
+                loc_data = orchestrator.locations_data.get(loc_id, {})
+                loc_name = loc_data.get("name", loc_id)
+                location_ref_path = None
+                cached_loc = Path("static/images/locations") / f"{loc_id}.png"
+                if cached_loc.exists():
+                    location_ref_path = str(cached_loc)
+                
+                with st.spinner("Visualizing scene..."):
+                    img_path = vis_gen.generate_scene_visual(
+                        payload["scene_description"], 
+                        p_name, 
+                        p_desc, 
+                        loc_name,
+                        image_ref_path=image_ref_path,
+                        location_ref_path=location_ref_path
+                    )
+            except Exception as e:
+                st.error(f"Visual gen failed. Ref: {image_ref_path}. Error: {e}")
+
+        messages.append({"role": "assistant", "content": payload, "image": img_path})
+        st.rerun()

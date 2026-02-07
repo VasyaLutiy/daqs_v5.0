@@ -83,7 +83,7 @@ personas:
 
     properties:
       dialogue_hook: "analyze_quest_difficulty"
-      target_social_goal: "ctx_joined"
+      target_social_goal: "ctx_neutral_talk"
       behavior_on_enter: "active"
       perform_quest_analysis: true
       use_dynamic_generation: true
@@ -173,7 +173,7 @@ personas:
             direction: forward
         properties:
           is_locked: false
-          provides_concept: cpt_banned
+          #provides_concept: cpt_banned
           induces_mood: "angry"
 
       - id: ctx_apology
@@ -200,13 +200,14 @@ personas:
             direction: forward
         properties:
           is_locked: true
-          required_concept: cpt_quest_none
+          required_concept: cpt_quest_hard
           induces_mood: "neutral"
+          rompt_hint: "Doloers is interested in any rumours of shadow and secrets."
 
       - id: ctx_shadow_entry
         type: context
         name: "The Shadow Corner"
-        description: "Dolores's demeanor shifts instantly."
+        description: "Dolores's demeanor shifts instantly. Her eyes scan your hands, weighing metal and whisper."
         connections:
           - to: ctx_shadow_deal
             direction: forward
@@ -214,12 +215,17 @@ personas:
           is_locked: true
           required_combo: ["cpt_shadow_rumor", "cpt_shadow_token"]
           induces_mood: "cynical"
+          target_goal_hint: "ctx_joined"
 
       - id: ctx_shadow_deal
         type: context
         name: "The Deal"
-        description: "She slides a sealed scroll across the table."
-        connections: []
+        description: "She slides a sealed scroll across the table. A raised brow suggests she expects a token of seriousness—or a clear refusal."
+        connections:
+          - to: ctx_partnership
+            direction: forward
+          - to: ctx_neutral_talk
+            direction: backward
         properties:
           is_locked: false
           provides_concept: cpt_forbidden_knowledge
@@ -249,31 +255,55 @@ personas:
         name: "Listen to Whispers"
         parent_context: ctx_neutral_talk
         yields: cpt_shadow_rumor
+        prompt_hint: "She glances at your hands: 'they say the key to the matter is a heavy black coin.'"
       
       - id: trig_find_coin
         type: trigger
         name: "Present Black Iron Coin"
         parent_context: ctx_neutral_talk
         yields: cpt_shadow_token
+        requires_item: item_shadow_coin
+        prompt_hint: "If you have a black coin, show it — then let's talk about shadows."
+        properties:
+          requires_shared_items: ["item_shadow_coin"]
+          provides_shared_items: ["item_shadow_coin"]
 
       - id: trig_hire_companion
         type: trigger
-        parent_context: ctx_tavern_intro
+        #parent_context: ctx_neutral_talk
+        requires_item: item_shadow_coin
         yields: cpt_partnership_offer
+        prompt_hint: "Сsay it straight if you want a partnership — and offer collateral."
+
       - id: trig_accept_partnership
         type: trigger
         parent_context: ctx_partnership
         yields: cpt_agreement
+
+      - id: trig_accept_shadow_deal
+        type: trigger
+        name: "Accept the Shadow Scroll"
+        parent_context: ctx_shadow_deal
+        yields: cpt_forbidden_knowledge
+
+      - id: trig_refuse_shadow_deal
+        type: trigger
+        name: "Refuse the Shadow Deal"
+        parent_context: ctx_shadow_deal
+        yields: cpt_respect
+
       - id: trig_force_rumor
         type: trigger
         name: "Force Rumors Out"
         parent_context: ctx_mockery
         yields: cpt_shadow_rumor
+
       - id: trig_demand_coin
         type: trigger
         name: "Demand the Coin"
         parent_context: ctx_mockery
         yields: cpt_shadow_token
+        
       - id: trig_apologize
         type: trigger
         name: "Offer Apology"
@@ -352,7 +382,8 @@ personas:
       - id: ctx_megan_joy
         type: context
         name: "Megan's Delight"
-        description: "Megan smiles radiantly."
+        #description: "Megan smiles radiantly."
+        description: "Megan smoothly approaches your face, looks tenderly into your eyes, ultramarine elven runes flicker on her cheeks"
         connections:
           - to: ctx_megan_intro
             direction: backward

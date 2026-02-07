@@ -14,6 +14,8 @@ text: |
   Available Logical Moves:
   {valid_moves}
 
+  Shared Items (offered by player): {shared_items}
+
   Available Triggers in Current Context:
   {available_triggers}
 

@@ -6,7 +6,7 @@ components:
     level: DEBUG
     file: logs/master.log
   npc:
-    level: INFO
+    level: DEBUG
     file: logs/npc.log
   storage:
     level: INFO
@@ -16,13 +16,13 @@ components:
     file: logs/gamemaster.log
     formatter: colored_console
   gamemaster.llm:
-    level: INFO
+    level: DEBUG
     file: logs/gamemaster.log
   gamemaster.visual:
     level: DEBUG
     file: logs/gamemaster.log
   gamemaster.state:
-    level: INFO
+    level: DEBUG
     file: logs/state_logic.log
 
 console:
