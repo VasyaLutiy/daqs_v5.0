@@ -441,10 +441,36 @@ def solve_with_unified_planning(domain_pddl: str, problem_pddl: str) -> Optional
         
         logger.debug(f"Parsed problem with {len(problem.actions)} actions")
         
-        # Solve with Fast Downward
-        planner = OneshotPlanner(problem_kind=problem.kind, name="fast-downward")
-        logger.debug("Calling Fast Downward via unified_planning")
-        result = planner.solve(problem) # type: ignore[attr-defined]
+        # Solve with Fast Downward first, then fallback to any available engine
+        planners = []
+        try:
+            planners.append(OneshotPlanner(problem_kind=problem.kind, name="fast-downward"))
+            logger.debug("Fast Downward planner available via unified_planning")
+        except Exception as e:
+            logger.warning(f"Fast Downward unavailable, falling back to default planner. ({e.__class__.__name__})")
+
+        if not planners:
+            try:
+                planners.append(OneshotPlanner(problem_kind=problem.kind))
+                logger.debug("Default unified_planning planner initialized")
+            except Exception as e:
+                logger.error(f"No unified_planning planner could be initialized: {e!r}")
+                return None
+
+        result = None
+        for planner in planners:
+            try:
+                logger.debug(f"Calling planner via unified_planning: {planner}")
+                result = planner.solve(problem) # type: ignore[attr-defined]
+                break
+            except Exception as e:
+                logger.error(f"Planner solve failed with {e.__class__.__name__}: {e!r}")
+                result = None
+                continue
+        
+        if result is None:
+            logger.error("All planners failed to produce a result.")
+            return None
         
         if result.plan:
             # Extract plan steps
