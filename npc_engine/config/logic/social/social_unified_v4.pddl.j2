@@ -11,6 +11,7 @@
     tag         ; Теги предметов (blade, armor, etc.)
     action-id   ; ID для визуальных событий
     secret      ; Высокоуровневые цели диалога
+    trait       ; Черты персонажа
   )
 
   (:constants
@@ -51,6 +52,7 @@
     (trusts ?npc - agent ?player - agent)      
     (secret-revealed ?s - secret)              
     (requires-item ?s - secret ?i - item)      
+    (has-trait ?npc - agent ?t - trait)
 
     ; --- Экипировка и Состояние (V2 Dynamic) ---
     (current-mood ?a - agent ?m - mood)

@@ -1,0 +1,21 @@
+{# Common PDDL rendering helpers #}
+{% macro render_object_lines(objects) -%}
+{% for obj in objects -%}
+    {{ obj }}
+{% endfor -%}
+{%- endmacro %}
+
+{% macro render_typed_objects(types, player_id) -%}
+{% for type_name, obj_list in types.items() -%}
+{% if obj_list %}
+    {{ obj_list | join(' ') }} - {{ type_name }}
+{% endif %}
+{% endfor -%}
+    {{player_id}} - object
+{%- endmacro %}
+
+{% macro render_facts(facts) -%}
+{% for fact in facts -%}
+    {{ fact }}
+{% endfor -%}
+{%- endmacro %}

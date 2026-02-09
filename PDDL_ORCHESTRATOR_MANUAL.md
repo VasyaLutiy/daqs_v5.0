@@ -1,44 +1,36 @@
-# DAQS v4.0: Enterprise PDDL Orchestrator Manual
+# DAQS v5.0: PDDL Orchestrator Manual
 
-## 1. Introduction
-In v4.0 the architecture shifts from rigid dialogue trees to **declarative personas**. Instead of scripting every dialogue step, we describe the “physics” of a character and their secrets.
+## What it does
+The orchestrator renders PDDL domains/problems (exploration + social), solves them via unified_planning, and feeds plans to the game/web UI. Persona/world data is injected from YAML into Jinja templates.
 
-## 2. Key Components
+## Key pieces
+- Templates: `npc_engine/config/logic/.../*.pddl.j2` with shared macros in `npc_engine/config/logic/macros.pddl.j2`.
+- Renderer: `PDDLTemplateRenderer` centralizes Jinja env.
+- Social assembler: `SocialWorldAssembler` builds objects/init facts from persona/world YAML (with pydantic validation).
+- Planner: `MasterPlanner` uses `PlannerEngine` (unified_planning with fast-downward fallback).
+- Validation: `validate_problem_predicates` fast-fails if init/goal uses predicates missing in the domain.
 
-### 2.1 Universal Domain (`universal_domain.pddl`)
-Contains shared social interaction rules for all NPCs:
-- **Red Lines**: Predicate `is-hostile`. When true, most actions are blocked.
-- **Leverage**: Predicate `has-item`. Secrets are revealed only when the player holds the right items.
-- **Goal**: Predicate `secret-revealed`.
+## Workflow (runtime)
+1) Select mode: `exploration` or `social` based on goal/context.
+2) Build domain:
+   - Exploration: static domain file.
+   - Social: `social_unified_v4.pddl.j2` rendered with persona constants (moods/tags/actions).
+3) Build problem:
+   - Exploration: `exploration/problem.pddl.j2` with typed objects and init facts from world graph/player state.
+   - Social: `social/problem.pddl.j2` with contexts/concepts/triggers/traits/locks, plus dynamic state.
+4) Validate PDDL (predicate presence) before solve.
+5) Solve via `PlannerEngine` (unified_planning). On success, return plan; on failure, diagnostics logged.
 
-### 2.2 Persona Atlas
-YAML file describing a specific NPC.
-- **Traits**: List of traits (greedy, paranoid, etc.) that shape LLM response style.
-- **Secrets**: List of goals the player can reach and the conditions to unlock them.
-- **Red Lines**: Triggers that switch the NPC into `hostile`.
+## Templates and macros
+- Use `macros.pddl.j2` for rendering typed objects and fact lists to avoid duplication.
+- Keep predicates/types in domain aligned with facts generated in assemblers (traits, items, portals, etc.).
 
-## 3. Workflow
+## Operational notes
+- Debug logging in `world` component triggers PDDL dump to `generated/pddl/`.
+- Persona/world YAML is validated when loaded; invalid payloads are logged and skipped.
+- If planning fails with “Unknown predicates…”, the validator caught a mismatch between domain and problem.
 
-### Step 1: Describe the character
-Create a file in `npc_engine/config/social_world/nodes/personas/`. Describe their secrets and key items. No dialogue code needed.
-
-### Step 2: Initialize the session
-The engine loads the universal domain and injects persona YAML data into it, forming a PDDL problem.
-
-### Step 3: Interaction loop
-1. **Input**: Player enters text.
-2. **NLU**: LLM classifies the player’s intent into PDDL terms (e.g., `cross-red-line` or `reveal-secret`).
-3. **Validation**: The PDDL engine checks whether the action is allowed (e.g., does the player have the item).
-4. **State Update**: If allowed, the simulator updates the world state.
-5. **Generation**: The LLM replies with the current list of valid PDDL actions and persona status in its prompt.
-
-## 4. Hallucination Guardrails
-In v4.0 the model is constrained by a **Valid Moves list**. If the planner does not include `reveal-secret` in the valid moves, the LLM is hard-forbidden (in the system prompt) from revealing any important info.
-
-## 5. Analytics and Simulation
-Use `UPSequentialSimulator` for:
-- Predicting player type (Aggressor/Explorer) early.
-- Auto-hinting if the player strays from the optimal path to a secret.
-
----
-*DAQS Enterprise Engine Documentation v4.0*
+## Extending
+- New domain actions: add to domain template, update assemblers if new predicates needed, add minimal contract test in `tests/`.
+- New planner engines: implement `PlannerEngine.solve`, wire into `MasterPlanner`.
+- Caching: wrap renderer/solve inputs with hashing if repeated personas/goals become hot paths.

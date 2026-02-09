@@ -5,13 +5,11 @@ from pathlib import Path
 from . import logger
 from .planner_libs import (
     diagnose_planning_failure,
-    parse_actions_from_domain,
-    parse_predicates,
-    extract_predicates_from_goal,
-    check_preconditions,
     save_pddl_files,
-    solve_with_unified_planning
+    validate_problem_predicates,
+    validate_problem_types,
 )
+from .pddl_engines import UnifiedPlanningEngine
 from ..logging_config import get_component_level
 from ..world.player_state import PlayerState
 
@@ -27,6 +25,7 @@ class MasterPlanner:
         """
         self.pddl_output_dir = Path(pddl_output_dir)
         self.pddl_output_dir.mkdir(parents=True, exist_ok=True)
+        self.engine = UnifiedPlanningEngine()
         logger.debug("MasterPlanner initialized with unified_planning")
         logger.debug(f"PDDL output directory: {pddl_output_dir}")
     
@@ -53,8 +52,14 @@ class MasterPlanner:
         if world_level == 'DEBUG':
             domain_file, problem_file = save_pddl_files(self.pddl_output_dir, domain_pddl, problem_pddl, player_id)
         
-        # Use unified_planning to solve
-        plan = solve_with_unified_planning(domain_pddl, problem_pddl)
+        for validator in (validate_problem_predicates, validate_problem_types):
+            validation_error = validator(domain_pddl, problem_pddl)
+            if validation_error:
+                logger.error(validation_error)
+                return None, validation_error
+
+        # Use unified_planning engine to solve
+        plan = self.engine.solve(domain_pddl, problem_pddl)
         
         if plan is not None:
             logger.info(f"Planning completed successfully with {len(plan)} steps")

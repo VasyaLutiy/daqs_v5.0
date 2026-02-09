@@ -1,17 +1,11 @@
+{% import "macros.pddl.j2" as pddl %}
 (define (problem {{world_id}}-quest)
   (:domain {{domain_id}})
   (:objects
-{% for type_name, obj_list in types.items() %}
-{% if obj_list %}
-    {{ obj_list | join(' ') }} - {{ type_name }}
-{% endif %}
-{% endfor %}
-    {{player_id}} - object
+{{ pddl.render_typed_objects(types, player_id) }}
   )
   (:init
-{% for fact in init_facts %}
-    {{ fact }}
-{% endfor %}
+{{ pddl.render_facts(init_facts) }}
   )
   (:goal
     {{goal_pddl}}

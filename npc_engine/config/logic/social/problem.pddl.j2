@@ -1,14 +1,11 @@
+{% import "macros.pddl.j2" as pddl %}
 (define (problem narrative-journey)
   (:domain narrative-flow)
   (:objects
-{% for obj in objects -%}
-    {{ obj }}
-{% endfor -%}
+{{ pddl.render_object_lines(objects) }}
   )
   (:init
-{% for fact in init_facts -%}
-    {{ fact }}
-{% endfor -%}
+{{ pddl.render_facts(init_facts) }}
   )
   (:goal
     {% if custom_goal %}

@@ -1,29 +1,23 @@
 #!/usr/bin/env python3
 """FastAPI version of NPC Engine for HTTP API access."""
 
-import sys
 from pathlib import Path
 from typing import Dict, Any, Tuple, Optional, List
 import json
 from datetime import datetime
 
-# Add the project root to Python path
-sys.path.insert(0, str(Path(__file__).parent))
-
-# Initialize logging first
-from engine.logging_config import logging_manager
-logging_manager.setup_all_loggers()
-
-from engine.world.graph import WorldGraph, WorldNode, NodeType, LocationNode, ItemNode, NPCNode, Edge, EdgeType, Condition
-from engine.world.player_state import PlayerState
-from engine.world.regenerator import WorldRegenerator
-from engine.master.pddl_orchestrator import PDDLOrchestrator
-from engine.master.planner import MasterPlanner
-from engine.master.quest_generator import QuestGenerator
-from engine.world.loader import load_world_from_flat_yaml
-from engine.master.hooks.registry import execute_hook # Added
-import engine.master.hooks.quest_hooks # Ensure hooks are registered
-from version import __version__
+from npc_engine.bootstrap import init_logging
+from npc_engine.engine.logging_config import logging_manager
+from npc_engine.engine.world.graph import WorldGraph, WorldNode, NodeType, LocationNode, ItemNode, NPCNode, Edge, EdgeType, Condition
+from npc_engine.engine.world.player_state import PlayerState
+from npc_engine.engine.world.regenerator import WorldRegenerator
+from npc_engine.engine.master.pddl_orchestrator import PDDLOrchestrator
+from npc_engine.engine.master.planner import MasterPlanner
+from npc_engine.engine.master.quest_generator import QuestGenerator
+from npc_engine.engine.world.loader import load_world_from_flat_yaml
+from npc_engine.engine.master.hooks.registry import execute_hook  # Added
+import npc_engine.engine.master.hooks.quest_hooks  # Ensure hooks are registered
+from npc_engine.version import __version__
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
@@ -34,6 +28,7 @@ WORLD_CONFIG_PATH = BASE_DIR / "config" / "world"
 DEFAULT_PLAYER_ID = "player_001"
 DEFAULT_LOCATION = "forest_entrance"
 
+init_logging()
 app = FastAPI(title="NPC Engine API", version=__version__)
 
 # Initialize services

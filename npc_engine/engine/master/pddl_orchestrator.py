@@ -6,6 +6,7 @@ from npc_engine.engine.world.player_state import PlayerState
 from npc_engine.engine.logging_config import logging_manager, get_component_level
 import yaml
 from npc_engine.engine.master.pddl_libs import SocialWorldAssembler
+from npc_engine.engine.master.pddl_builder import PDDLTemplateRenderer
 
 logger = logging_manager.get_component_logger('master')
 
@@ -14,7 +15,7 @@ class PDDLOrchestrator:
         self.logic_dir = Path(logic_dir)
         # Add social world config to template search path for V2
         social_dir = Path("npc_engine/config/social_world")
-        self.env = jinja2.Environment(loader=jinja2.FileSystemLoader([self.logic_dir, social_dir]))
+        self.renderer = PDDLTemplateRenderer([self.logic_dir, social_dir])
 
     def _extract_constants(self, persona_data: Dict[str, Any]) -> Dict[str, Set[str]]:
         constants = {"tags": set(), "moods": set(), "actions": set()}
@@ -54,15 +55,14 @@ class PDDLOrchestrator:
         if use_dynamic_v2 and mode == "social":
             template_path = "social/social_unified_v4.pddl.j2"
             try:
-                template = self.env.get_template(template_path)
                 logger.info(f"Using V4 Social Domain Template: {template_path}")
                 # Pass constants to template
-                return template.render(persona=persona_data, constants=constants)
+                return self.renderer.render(template_path, {"persona": persona_data, "constants": constants})
             except jinja2.TemplateNotFound:
                 logger.error(f"V4 Template not found: {template_path}")
                 # Fallback to older V2 if V4 missing
                 try:
-                    return self.env.get_template("social_domain_v2.pddl.j2").render(persona=persona_data, constants=constants)
+                    return self.renderer.render("social_domain_v2.pddl.j2", {"persona": persona_data, "constants": constants})
                 except: return ""
         else:
             # Fallback to standard static domain
@@ -74,8 +74,6 @@ class PDDLOrchestrator:
                 return ""
 
     def assemble_problem(self, mode: str, player_state: PlayerState, world_graph: WorldGraph, goal_pddl: str) -> str:
-        template = self.env.get_template(f"{mode}/problem.pddl.j2")
-        
         # Build data similar to _generate_problem
         types = world_graph.get_all_pddl_types()
         
@@ -154,7 +152,7 @@ class PDDLOrchestrator:
             "goal_pddl": goal_pddl
         }
         
-        return template.render(data)
+        return self.renderer.render(f"{mode}/problem.pddl.j2", data)
 
     def get_persona_metadata(self, persona_id: str, config_dir: str = "npc_engine/config/social_world") -> Dict[str, Any]:
         """
@@ -314,8 +312,6 @@ class PDDLOrchestrator:
             logger.warning(f"Failed to save PDDL files: {e}")
 
     def assemble_social_problem(self, player_id: str, goal_context_id: str, dynamic_state: Dict[str, Any] = None, config_dir: str = "npc_engine/config/social_world", active_persona: str = None, custom_goal: str = None, constants: Dict[str, Set[str]] = None) -> str:
-        template = self.env.get_template("social/problem.pddl.j2")
-        
         assembler = SocialWorldAssembler(config_path=Path(config_dir), logger=logger)
         personas, target_atlas, target_persona_data = assembler.load_persona_bundle(active_persona)
         contexts, concepts, triggers = assembler.load_world_data(target_atlas, target_persona_data)
@@ -360,13 +356,14 @@ class PDDLOrchestrator:
             for item_id in extra_items:
                 init_facts.append(f"(has-item {player_id} {item_id})")
 
-        data = {
-            "objects": objects,
-            "init_facts": init_facts,
-            "goal_context_id": goal_context_id,
-            "custom_goal": custom_goal
-        }
-        
-        return template.render(data)
+        return self.renderer.render(
+            "social/problem.pddl.j2",
+            {
+                "objects": objects,
+                "init_facts": init_facts,
+                "goal_context_id": goal_context_id,
+                "custom_goal": custom_goal,
+            },
+        )
 
     # === Helper methods for social world assembly (migrated to pddl_libs) ===

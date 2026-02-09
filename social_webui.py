@@ -4,16 +4,7 @@ import json
 import requests
 from pathlib import Path
 
-# Path setup
-sys.path.insert(0, str(Path(__file__).parent))
-
-# Config directory
-CONFIG_DIR = Path("npc_engine/config")
-
-# Initialize Logging
-from npc_engine.engine.logging_config import logging_manager
-logging_manager.setup_all_loggers()
-
+from npc_engine.bootstrap import init_logging
 from npc_engine.engine.world.social_pddl_gen import SocialPDDLGenerator
 from npc_engine.engine.master.planner import MasterPlanner
 from npc_engine.engine.world.player_state import PlayerState
@@ -24,11 +15,15 @@ from npc_engine.engine.master.pddl_orchestrator import PDDLOrchestrator
 from npc_engine.engine.master.hooks.registry import execute_hook
 from npc_engine.main_fast import load_player_from_json_data, load_world
 
+# Config directory
+CONFIG_DIR = Path("npc_engine/config")
+
 # Import our modules
 from npc_engine.engine.webui.social_web_libs import analyze_quest_difficulty, save_player_state, sync_world, API_URL, PLAYER_STATE_FILE
 from npc_engine.engine.webui.social_web_handle import handle_input
 from npc_engine.engine.webui.social_web_render import render_sidebar, render_right_column, render_chat
 
+init_logging()
 st.set_page_config(page_title="DAQS v5.0: Unified World", page_icon="🌍", layout="wide")
 
 # --- INITIALIZATION FUNCTIONS ---
