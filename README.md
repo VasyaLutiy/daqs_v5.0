@@ -51,6 +51,9 @@ uvicorn main_fast:app --host 0.0.0.0 --port 8000
 ```bash
 # From the repo root
 streamlit run social_webui.py
+
+With visualizaion Gemini 2.5 image
+streamlit run social_webui.py -- --visual
 ```
 
 ## 🛠 Key Features in v5.0
