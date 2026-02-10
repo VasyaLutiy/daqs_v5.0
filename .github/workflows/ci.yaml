@@ -1,0 +1,29 @@
+name: CI - PDDL validation
+
+on:
+  pull_request:
+  push:
+    branches:
+      - "feature/**"
+
+jobs:
+  pddl-validation:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          if [ -f requirements-dev.txt ]; then pip install -r requirements-dev.txt; fi
+
+      - name: Run PDDL validation test
+        run: python tests/test_pddl_validation.py
