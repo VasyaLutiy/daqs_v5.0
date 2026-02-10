@@ -56,6 +56,10 @@ With visualizaion Gemini 2.5 image
 streamlit run social_webui.py -- --visual
 ```
 
+### 3. Real Demo
+http://54.160.196.97:8081/
+
+
 ## 🛠 Key Features in v5.0
 * **The Oracle Prologue**: NPC auto-generates a quest prophecy by analyzing the PDDL graph.
 * **Mini-Map**: Live visualization of the location graph with fog of war.
