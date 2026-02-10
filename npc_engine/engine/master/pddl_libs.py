@@ -3,6 +3,8 @@ from pathlib import Path
 from typing import Any, Dict, Optional, Set, Tuple
 import yaml
 
+from npc_engine.engine.config.schemas import validate_persona_payload
+
 
 @dataclass
 class SocialWorldAssembler:
@@ -23,6 +25,7 @@ class SocialWorldAssembler:
         for f in pers_dir.rglob("*.yaml"):
             try:
                 data = yaml.safe_load(f.read_text())
+                data = validate_persona_payload(data, self.logger)
             except Exception as e:
                 self.logger.error(f"Error loading persona file {f}: {e}")
                 continue
@@ -133,12 +136,26 @@ class SocialWorldAssembler:
         target_persona_data: Any,
         active_persona: Optional[str],
         domain_tags: Set[str],
+        dynamic_state: Optional[Dict[str, Any]] = None,
     ) -> list[str]:
         objects = []
-        objects.extend([f"{cid} - context" for cid in contexts])
-        objects.extend([f"{cid} - concept" for cid in concepts])
-        objects.extend([f"{tid} - trigger" for tid in triggers])
-        objects.append(f"{player_id} - agent")
+        seen = set()
+
+        def add(obj: str):
+            if obj not in seen:
+                seen.add(obj)
+                objects.append(obj)
+
+        for cid in contexts:
+            add(f"{cid} - context")
+        for cid in concepts:
+            add(f"{cid} - concept")
+        for tid in triggers:
+            add(f"{tid} - trigger")
+        add(f"{player_id} - agent")
+        if dynamic_state:
+            for c in dynamic_state.get("concepts", []):
+                add(f"{c} - concept")
 
         if target_persona_data:
             if "secrets" in target_persona_data:

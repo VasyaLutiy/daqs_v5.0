@@ -93,3 +93,56 @@ class UnifiedPlanningEngine(PlannerEngine):
 
         logger.warning("No plan found by unified_planning")
         return None
+
+
+class UnifiedPlanningNamedEngine(PlannerEngine):
+    """
+    Adapter to invoke a specific unified_planning engine by name (e.g., enhsp, tarski, lpg).
+    If the engine is unavailable, returns None with a warning instead of raising.
+    """
+
+    def __init__(self, engine_name: str):
+        self.engine_name = engine_name
+
+    def solve(self, domain_pddl: str, problem_pddl: str) -> Optional[List[str]]:
+        if not _UP_AVAILABLE or OneshotPlanner is None or PDDLReader is None:
+            logger.error("Unified Planning library is not available.")
+            return None
+        try:
+            reader = PDDLReader()
+            problem = reader.parse_problem_string(domain_pddl, problem_pddl)
+        except Exception as e:
+            logger.error(f"[{self.engine_name}] failed to parse PDDL: {e!r}")
+            return None
+
+        try:
+            planner = OneshotPlanner(problem_kind=problem.kind, name=self.engine_name)
+            logger.debug(f"Calling unified_planning engine '{self.engine_name}'")
+            result = planner.solve(problem)  # type: ignore[attr-defined]
+        except Exception as e:
+            logger.warning(f"Engine '{self.engine_name}' unavailable or failed: {e!r}")
+            return None
+
+        if result and result.plan:
+            steps = []
+            for action in result.plan.actions:
+                s = f"{action.action.name}"
+                if action.actual_parameters:
+                    params = " ".join(str(p) for p in action.actual_parameters)
+                    s += f" {params}"
+                steps.append(s)
+            return steps
+
+        logger.warning(f"No plan found by engine '{self.engine_name}'")
+        return None
+
+
+class NullPlannerEngine(PlannerEngine):
+    """
+    Heuristic/placeholder engine: always returns None but logs intention.
+    Use as a safe fallback when no planner backends are installed.
+    """
+
+    def solve(self, domain_pddl: str, problem_pddl: str) -> Optional[List[str]]:
+        logger.warning("NullPlannerEngine: no planner backend available; returning None.")
+        return None

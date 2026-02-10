@@ -46,32 +46,25 @@ class PDDLOrchestrator:
         """
         Gets the PDDL domain. Supports V2 dynamic domains if persona has behavior rules.
         """
-        # Check for dynamic behavior capability (V2 Architecture)
-        use_dynamic_v2 = False
-    
-        if persona_data and "behavior_rules" in persona_data:
-            use_dynamic_v2 = True
-
-        if use_dynamic_v2 and mode == "social":
+        if mode == "social":
             template_path = "social/social_unified_v4.pddl.j2"
             try:
                 logger.info(f"Using V4 Social Domain Template: {template_path}")
-                # Pass constants to template
                 return self.renderer.render(template_path, {"persona": persona_data, "constants": constants})
             except jinja2.TemplateNotFound:
                 logger.error(f"V4 Template not found: {template_path}")
-                # Fallback to older V2 if V4 missing
                 try:
                     return self.renderer.render("social_domain_v2.pddl.j2", {"persona": persona_data, "constants": constants})
-                except: return ""
-        else:
-            # Fallback to standard static domain
-            domain_path = self.logic_dir / mode / "domain.pddl"
-            try:
-                return domain_path.read_text()
-            except FileNotFoundError:
-                logger.error(f"Domain file not found: {domain_path}")
-                return ""
+                except: 
+                    logger.error("Failed to load social domain template fallback.")
+                    return ""
+        # Non-social modes
+        domain_path = self.logic_dir / mode / "domain.pddl"
+        try:
+            return domain_path.read_text()
+        except FileNotFoundError:
+            logger.error(f"Domain file not found: {domain_path}")
+            return ""
 
     def assemble_problem(self, mode: str, player_state: PlayerState, world_graph: WorldGraph, goal_pddl: str) -> str:
         # Build data similar to _generate_problem
@@ -330,6 +323,7 @@ class PDDLOrchestrator:
             target_persona_data=target_persona_data,
             active_persona=active_persona,
             domain_tags=domain_tags,
+            dynamic_state=dynamic_state,
         )
 
         # Add dynamic inventory items (if provided in dynamic_state)

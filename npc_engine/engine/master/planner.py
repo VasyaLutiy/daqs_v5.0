@@ -25,6 +25,14 @@ class MasterPlanner:
         """
         self.pddl_output_dir = Path(pddl_output_dir)
         self.pddl_output_dir.mkdir(parents=True, exist_ok=True)
+        # To try other UP engines later, instantiate and iterate over a list like:
+        # engines = [
+        #     UnifiedPlanningEngine(),                  # fast-downward → default UP
+        #     UnifiedPlanningNamedEngine("enhsp"),      # alternative engine
+        #     UnifiedPlanningNamedEngine("tarski"),     # alternative engine
+        #     UnifiedPlanningNamedEngine("lpg"),        # alternative engine
+        # ]
+        # and use the first successful plan.
         self.engine = UnifiedPlanningEngine()
         logger.debug("MasterPlanner initialized with unified_planning")
         logger.debug(f"PDDL output directory: {pddl_output_dir}")

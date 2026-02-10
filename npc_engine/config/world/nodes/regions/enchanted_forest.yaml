@@ -108,4 +108,4 @@ locations:
     npcs:
     - id: npc_dolores
       type: npc
-      dialogue_quest: true
+      dialogue_quest: false

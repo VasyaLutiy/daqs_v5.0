@@ -117,8 +117,7 @@ class VisualGenerator:
         - Show paths/exits described above so adjacent locations feel connected.
         - Emphasize landmarks that help navigation (bridges, gates, statues, thickets).
 
-        STYLE:
-        Photorealistic, hyper-detailed, cinematic lighting, atmospheric, digital painting.
+        Style: Photorealistic, hyper-realistic, ultra-detailed, cinematic realism, dramatic lighting with deep shadows and volumetric god rays, 8K resolution, sharp focus, highly intricate details, realistic textures, lifelike skin and materials, focus on expressive character faces and dynamic action poses, in the style of hyperrealistic digital art, octane render, unreal engine 5
         """
         ref_paths = [image_ref_path] if image_ref_path else None
         return self._generate_and_save(target_file, prompt, ref_paths)

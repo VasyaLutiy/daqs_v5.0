@@ -314,14 +314,26 @@ def validate_problem_predicates(domain_pddl: str, problem_pddl: str) -> Optional
 
 
 def extract_domain_types(domain_pddl: str) -> Set[str]:
-    """Extracts type names from the domain :types block."""
-    match = re.search(r"\(:types(.*?)\)", domain_pddl, re.DOTALL)
+    """Extract type names from the domain :types block (line by line, ignore comments)."""
+    match = re.search(r"\(:types(.*?)\n\s*\)", domain_pddl, re.DOTALL)
     if not match:
         return set()
     raw = match.group(1)
-    types = set()
-    for part in re.finditer(r"([\w-]+)", raw):
-        types.add(part.group(1))
+    types: Set[str] = {"object"}
+    for line in raw.splitlines():
+        line = line.strip()
+        if not line or line.startswith(";"):
+            continue
+        # Remove inline comments
+        if ";" in line:
+            line = line.split(";", 1)[0].strip()
+        if not line:
+            continue
+        # Split by '-' to strip supertypes; take tokens on the left
+        left = line.split("-", 1)[0]
+        for tok in left.split():
+            if tok:
+                types.add(tok)
     return types
 
 
