@@ -1,5 +1,14 @@
 # Changelog: DAQS Fresh Edition
 
+## [5.7.0] - 2026-02-10
+### Added
+- **Enterprise Split**: New FastAPI entrypoint `npc_engine/main_fast_ent.py` with thin Streamlit client `social_webui_ent.py`; all planning/world logic now server-side.
+- **Shared Enterprise Libs**: `npc_engine/fastapi_ent_libs.py` centralizes world/player loading, planning, and quest generation for the enterprise API.
+
+### Removed
+- Legacy Streamlit dashboard (`social_webui.py`) and legacy UI helpers under `npc_engine/engine/webui/`.
+- Legacy `main_fast.py` FastAPI entrypoint (superseded by `main_fast_ent.py`).
+
 ## [5.6.0] - 2026-01-15
 ### Added
 - **Architectural Refactoring**: Introduced `PDDLOrchestrator` to centralize and decouple PDDL domain/problem generation from the API layer.

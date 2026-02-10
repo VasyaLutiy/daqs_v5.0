@@ -2,7 +2,7 @@
 
 **DAQS (Deterministic Adaptive Quest System)** is a hybrid game engine that combines deterministic planning logic (PDDL) with LLM creativity.
 
-Version 5.0 merges physical world navigation (World Engine) and deep social character logic (Social Engine) into one seamless experience.
+Version 5.1 (enterprise split) keeps all planning/world logic server-side (FastAPI) and exposes a thin Streamlit client.
 
 ## About the project
 We built DAQS for the Gemini hackathon to bridge a gap we kept seeing: rigid scripted NPCs feel fake, while free-form LLM NPCs hallucinate, forget inventory, and break quest chains. DAQS pairs Gemini for natural language with a PDDL planner for provable game logic, so characters improvise while every move is mathematically grounded.
@@ -41,19 +41,20 @@ The project is split into two independent layers that work together:
 
 Dependencies are required (`pip install -r requirements.txt`) plus a `GEMINI_API_KEY` environment variable.
 
-### 1. Launch the logic server (Backend)
+### 1. Launch the logic server (Backend, enterprise)
 ```bash
+export NPC_API_BASE="http://localhost:8001"  # optional; default matches below
 cd npc_engine
-uvicorn main_fast:app --host 0.0.0.0 --port 8000
+uvicorn main_fast_ent:app --host 0.0.0.0 --port 8001
 ```
 
-### 2. Launch the interface (Frontend)
+### 2. Launch the interface (Frontend, thin client)
 ```bash
 # From the repo root
-streamlit run social_webui.py
+streamlit run social_webui_ent.py
 
-With visualizaion Gemini 2.5 image
-streamlit run social_webui.py -- --visual
+# Enable visuals (image gen) with -- --visual if your env supports it
+streamlit run social_webui_ent.py -- --visual
 ```
 
 ## 🛠 Key Features in v5.0
@@ -65,8 +66,10 @@ streamlit run social_webui.py -- --visual
 
 ## 📂 Project Structure
 * `gamemaster/`: Social engine logic, prompts, and orchestrator.
-* `npc_engine/`: World engine logic, FastAPI server, and PDDL generators.
-* `social_webui.py`: Single Streamlit dashboard.
+* `npc_engine/`: World engine logic, FastAPI servers, and PDDL generators.
+    * `main_fast_ent.py`: Enterprise FastAPI entrypoint (all planner/world logic).
+    * `fastapi_ent_libs.py`: Shared helpers for the enterprise server.
+* `social_webui_ent.py`: Thin Streamlit client that talks to `main_fast_ent`.
 * `player_state.json`: Current game save.
 
 ---

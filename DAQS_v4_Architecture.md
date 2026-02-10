@@ -63,5 +63,7 @@ This lets the system catch nuances:
 
 ### How to Run
 ```bash
-streamlit run social_webui.py
+# Enterprise (v5.1+): FastAPI backend + thin Streamlit client
+uvicorn npc_engine.main_fast_ent:app --host 0.0.0.0 --port 8001
+streamlit run social_webui_ent.py
 ```
