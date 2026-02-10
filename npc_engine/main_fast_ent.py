@@ -15,13 +15,17 @@ from npc_engine.bootstrap import init_logging
 from npc_engine.engine.logging_config import logging_manager
 from npc_engine.engine.world.graph import WorldGraph
 from npc_engine.engine.world.player_state import PlayerState
-from npc_engine.engine.world.regenerator import WorldRegenerator
-from npc_engine.engine.world.loader import load_world_from_flat_yaml
-from npc_engine.engine.master.pddl_orchestrator import PDDLOrchestrator
-from npc_engine.engine.master.planner import MasterPlanner
 from npc_engine.engine.master.hooks.registry import execute_hook
 import npc_engine.engine.master.hooks.quest_hooks  # ensure hooks registered
 from npc_engine.version import __version__
+from npc_engine.fastapi_ent_libs import (
+    load_world,
+    load_player_from_json_data,
+    collect_location_data,
+    collect_available_quests,
+    generate_plan_and_quest,
+    process_request as process_request_lib,
+)
 
 from gamemaster import social_llm
 from gamemaster.prompt_orchestrator import orchestrator
@@ -223,55 +227,9 @@ def _apply_shadow_goal_logic(social_state: Dict[str, Any]) -> None:
     """
     return  # use StateManager/valid moves instead of manual injections
 
-# === Helpers ===
-def load_world() -> WorldGraph:
-    return load_world_from_flat_yaml(WORLD_CONFIG_PATH)
-
-
-def load_player_from_json_data(data: Dict[str, Any]) -> Tuple[PlayerState, Optional[str]]:
-    player = PlayerState(
-        player_id=data.get("id", "player_001"),
-        current_location=data.get("location", "forest_entrance")
-    )
-    for ab_id, level in data.get("abilities", {}).items():
-        player.add_ability(ab_id, int(level))
-    inventory_data = data.get("inventory", {})
-    if "items" in inventory_data:
-        for item_id, count in inventory_data["items"].items():
-            player.inventory.add_item(item_id, int(count))
-    else:
-        for item_id, count in inventory_data.items():
-            player.inventory.add_item(item_id, int(count))
-    knowledge = data.get("knowledge", {})
-    player.discovered_locations = set(knowledge.get("discovered_locations", []))
-    player.visited_locations = set(knowledge.get("visited_locations", []))
-    player.known_npcs = set(knowledge.get("known_npcs", []))
-    history = data.get("history", {})
-    player.defeated_enemies = set(history.get("defeated_enemies", []))
-    player.avoided_enemies = set(history.get("avoided_enemies", []))
-    player.talked_to = set(history.get("talked_to", []))
-    quest_state = data.get("quest_state", {})
-    player.completed_quests = set(quest_state.get("completed_quests", []))
-    goal = data.get("goal")
-    return player, goal
-
-
-def collect_location_data(world: WorldGraph, location_id: str, goal: Optional[str] = None):
-    """Collect NPCs, exits, and items for a given location."""
-    from npc_engine.main_fast import collect_location_data as _cld
-    return _cld(world, location_id, goal)
-
-
-def generate_plan_and_quest(world: WorldGraph, player: PlayerState, goal: Optional[str], oracle_mode: bool):
-    """Reuse logic from main_fast generate_plan_and_quest."""
-    from npc_engine.main_fast import generate_plan_and_quest as _gpq
-    return _gpq(world, player, goal, oracle_mode)
-
-
-def collect_available_quests(world: WorldGraph, player: PlayerState) -> List[Dict[str, Any]]:
-    """Reuse available quest discovery from main_fast."""
-    from npc_engine.main_fast import collect_available_quests as _caq
-    return _caq(world, player)
+# === Helpers (wrappers around shared libs) ===
+def load_world_ent() -> WorldGraph:
+    return load_world(WORLD_CONFIG_PATH)
 
 
 # === Endpoints ===
@@ -286,7 +244,7 @@ async def world_state(player_id: str = "player_001", location: str = "forest_ent
     request_id = str(uuid.uuid4())
     start_ts = datetime.utcnow()
     try:
-        world = load_world()
+        world = load_world_ent()
         # Minimal player init
         player = PlayerState(player_id=player_id, current_location=location)
         npcs, exits, items = collect_location_data(world, player.current_location, goal)
@@ -330,7 +288,7 @@ async def world_graph(request: GraphRequest):
 @app.post("/plan/exploration", response_model=PlanResponse)
 async def plan_exploration(request: PlanRequest):
     try:
-        result = process_request(request.input_json, oracle_mode=request.oracle_mode)
+        result = process_request_lib(request.input_json, WORLD_CONFIG_PATH, oracle_mode=request.oracle_mode)
         return PlanResponse(**result)
     except Exception as e:
         logger.error(f"/plan/exploration failed: {e}", exc_info=True)
@@ -343,7 +301,7 @@ async def quest_difficulty(request: QuestDifficultyRequest):
         goal = request.goal
         if not goal:
             return QuestDifficultyResponse(status="ok", concept="cpt_quest_none", plan_length=0)
-        world = load_world()
+        world = load_world_ent()
         player = PlayerState(player_id="player_001", current_location="forest_entrance")
         player.goal = goal
         # Use the advanced hook via execute_hook
@@ -366,7 +324,7 @@ async def quest_accept(request: QuestAcceptRequest):
         player_data = request.player_state.copy()
         player_data["goal"] = request.quest_goal
         player, goal = load_player_from_json_data(player_data)
-        world = load_world()
+        world = load_world_ent()
         plan_result, quest_steps, error_msg = generate_plan_and_quest(world, player, goal, request.oracle_mode)
         payload = social_llm.generate_quest_mission(request.social_state, plan_result or [], request.quest_name)
         meta = {
@@ -393,7 +351,7 @@ async def quest_accept(request: QuestAcceptRequest):
 async def process_endpoint(request: PlanRequest):
     """Compatibility endpoint mirroring /plan/exploration."""
     try:
-        result = process_request(request.input_json, oracle_mode=request.oracle_mode)
+        result = process_request_lib(request.input_json, WORLD_CONFIG_PATH, oracle_mode=request.oracle_mode)
         return PlanResponse(**result)
     except Exception as e:
         logger.error(f"/process failed: {e}", exc_info=True)
@@ -437,7 +395,7 @@ async def social_init(request: SocialInitRequest):
         quest_concept = None
         if request.can_quest and request.player_state:
             try:
-                world = load_world()
+                world = load_world_ent()
                 player, goal = load_player_from_json_data(request.player_state)
                 player.goal = goal
                 quest_concept = execute_hook("analyze_quest_difficulty", player, world)
@@ -639,14 +597,12 @@ async def social_message(request: SocialMessageRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# --- Compatibility: reuse process_request from main_fast ---
+# --- Compatibility: local process_request wrapper ---
 def process_request(input_data: Dict[str, Any], oracle_mode: bool = False) -> Dict[str, Any]:
-    """Thin wrapper calling existing logic from main_fast with request metadata."""
-    from npc_engine.main_fast import process_request as _pr
-
+    """Wrapper around enterprise libs to keep response metadata consistent."""
     request_id = str(uuid.uuid4())
     start_ts = datetime.utcnow()
-    result = _pr(input_data, oracle_mode=oracle_mode)
+    result = process_request_lib(input_data, WORLD_CONFIG_PATH, oracle_mode=oracle_mode)
 
     duration_ms = (datetime.utcnow() - start_ts).total_seconds() * 1000
     meta = result.setdefault("metadata", {})
