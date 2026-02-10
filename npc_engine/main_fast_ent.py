@@ -15,6 +15,7 @@ from npc_engine.bootstrap import init_logging
 from npc_engine.engine.logging_config import logging_manager
 from npc_engine.engine.world.graph import WorldGraph
 from npc_engine.engine.world.player_state import PlayerState
+from npc_engine.engine.master.pddl_orchestrator import PDDLOrchestrator
 from npc_engine.engine.master.hooks.registry import execute_hook
 import npc_engine.engine.master.hooks.quest_hooks  # ensure hooks registered
 from npc_engine.version import __version__
