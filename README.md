@@ -57,7 +57,7 @@ streamlit run social_webui.py -- --visual
 ```
 
 ### 3. Real Demo
-http://3.87.92.213:8081/
+http://3.90.252.82:8081
 
 
 ## 🛠 Key Features in v5.0
