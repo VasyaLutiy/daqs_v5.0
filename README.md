@@ -74,3 +74,63 @@ streamlit run social_webui_ent.py -- --visual
 
 ---
 Developed by VasyaLutiy & AI Architect.
+
+## CI/CD (Prod -> single Docker container)
+
+This repo now includes GitHub Actions pipelines:
+
+- `CI` (`.github/workflows/ci.yml`)
+  - Runs on pull requests to `main`/`Prod` and on pushes to non-`Prod` branches.
+  - Installs dependencies, runs focused phase tests, builds Docker image.
+
+- `CD-Prod` (`.github/workflows/cd-prod.yml`)
+  - Runs only on push to branch `Prod` (or manual `workflow_dispatch`).
+  - Builds image and pushes to `ghcr.io/<owner>/<repo>` with tags:
+    - `prod-latest`
+    - `sha-<commit_sha>`
+  - Deploys to one remote container named `daqs` over SSH.
+
+### Required GitHub Secrets
+
+Set these in repository settings (`Settings -> Secrets and variables -> Actions`):
+
+- `PROD_HOST` - production server host/IP
+- `PROD_USER` - SSH user
+- `PROD_SSH_KEY` - private SSH key (PEM/OpenSSH)
+- `PROD_PORT` - SSH port (usually `22`)
+- `PROD_ENV_FILE` - full `.env` content for production container
+- `GHCR_USERNAME` - GitHub username/org allowed to pull GHCR image
+- `GHCR_TOKEN` - token with `read:packages` for GHCR pull on server
+
+### Deploy flow
+
+1. Merge your working branch into `Prod`.
+2. Push `Prod`.
+3. GitHub Actions builds image and deploys it to the server.
+4. Workflow validates `http://localhost:8001/health` on the server.
+
+### Manual deploy first (docker compose, no CI/CD)
+
+Run on production server inside repo directory:
+
+```bash
+git fetch origin
+git checkout Prod
+git pull --ff-only origin Prod
+cp env.example .env   # once; then edit .env with real production values
+docker compose up -d --build
+```
+
+Or use helper script:
+
+```bash
+./scripts/deploy_manual_prod.sh
+```
+
+Checks:
+
+```bash
+docker compose ps
+curl -fsS http://localhost:8001/health
+docker compose logs -f --tail=200 daqs
+```
