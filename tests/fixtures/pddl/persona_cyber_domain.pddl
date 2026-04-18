@@ -1,4 +1,4 @@
-(define (domain narrative-flow-v2)
+(define (domain narrative-flow)
   (:requirements :strips :typing :negative-preconditions :adl)
 
   (:types
@@ -13,17 +13,6 @@
   )
 
   (:constants
-    {%- if constants %}
-      {%- for act in constants.actions %}
-    id_{{ act }} - action-id
-      {%- endfor %}
-      {%- for tag in constants.tags %}
-    {{ tag }} - tag
-      {%- endfor %}
-      {%- for mood in constants.moods %}
-    {{ mood }} - mood
-      {%- endfor %}
-    {%- endif %}
   )
 
   (:predicates
@@ -96,33 +85,4 @@
   )
 
   ; --- DYNAMIC BEHAVIOR GENERATION ---
-  {%- if persona is defined and persona.behavior_rules is defined %}
-  {%- for rule in persona.behavior_rules %}
-  (:action do_{{ rule.id }}
-      :parameters (?a - agent 
-                   {%- if rule.requires_holding_tag %} ?item_h - item ?tag_h - tag {%- endif %}
-                   {%- if rule.requires_wearing_tag %} ?item_w - item ?tag_w - tag {%- endif %}
-      )
-      :precondition (and 
-          (current-mood ?a {{ rule.mood }})
-          {%- if rule.requires_holding_tag %}
-          (holding ?a ?item_h)
-          (has-tag ?item_h ?tag_h)
-          (is-tag ?tag_h {{ rule.requires_holding_tag }})
-          {%- endif %}
-          {%- if rule.requires_wearing_tag %}
-          (wearing ?a ?item_w)
-          (has-tag ?item_w ?tag_w)
-          (is-tag ?tag_w {{ rule.requires_wearing_tag }})
-          {%- endif %}
-          {%- if rule.requires_empty_hands %}
-          (forall (?i - item) (not (holding ?a ?i)))
-          {%- endif %}
-      )
-      :effect (and 
-          (visual-event-triggered id_{{ rule.id }})
-      )
-  )
-  {%- endfor %}
-  {%- endif %}
 )

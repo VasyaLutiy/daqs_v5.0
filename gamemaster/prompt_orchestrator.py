@@ -27,17 +27,30 @@ class PromptOrchestrator:
         self.personas_data = {}
         self.triggers_data = {}
         self.locations_data = {}
+        self.default_hint_levels: Dict[int, Dict[str, str]] = {}
         self.reload()
 
     def reload(self):
         """Force reloads all data and templates from disk."""
         self._load_all()
+        self._load_hint_levels()
         self._load_yaml_data(self.concepts_dir, self.concepts_data, self._extract_concept_data)
         self._load_yaml_data(self.contexts_dir, self.contexts_data, self._extract_context_data)
         self._load_yaml_data(self.personas_dir, self.personas_data, self._extract_persona_data)
         self._load_yaml_data(self.triggers_dir, self.triggers_data, self._extract_trigger_data)
         self._load_locations()
         logger.info("Orchestrator: Data reloaded from disk.")
+
+    def _load_hint_levels(self):
+        """Load global fallback hint escalation config from hint_levels.yaml."""
+        path = self.base_dir / "system" / "hint_levels.yaml"
+        try:
+            data = yaml.safe_load(path.read_text())
+            self.default_hint_levels = data.get("levels", {}) if data else {}
+            logger.info(f"Orchestrator: Loaded {len(self.default_hint_levels)} hint levels.")
+        except Exception as e:
+            logger.warning(f"Orchestrator: Could not load hint_levels.yaml ({e}). No global defaults.")
+            self.default_hint_levels = {}
 
     def _load_locations(self):
         """Load location data from world regions."""
@@ -136,22 +149,28 @@ class PromptOrchestrator:
                     'name': concept.get('name', concept['id']),
                     'content': concept.get('description', 'No details available.')
                 }
-            
+
             for trigger in data.get('triggers', []):
                 self.triggers_data[trigger['id']] = trigger.get('name', trigger['id'])
-            
+
+            # Atlas-level hint_escalation: default for all personas in this file
+            atlas_hints: Dict[int, Any] = data.get('hint_escalation', {})
+
             # Extract personas and their specific contexts
             for persona in data.get('personas', []):
-                # Store the persona data
+                # Merge: atlas hints as base, persona hints override per-level
+                persona_hints: Dict[int, Any] = persona.get('hint_escalation', {})
+                persona['hint_escalation'] = {**atlas_hints, **persona_hints}
+
                 self.personas_data[persona['id']] = persona
-                
+
                 # Extract persona-specific contexts
                 for context in persona.get('contexts', []):
                     self.contexts_data[context['id']] = {
                         'name': context.get('name', context['id']),
                         'desc': context.get('description', 'No description.')
                     }
-            
+
             # Return the atlas id and empty dict (atlas itself not used directly)
             return data['id'], {}
         else:
@@ -190,18 +209,44 @@ class PromptOrchestrator:
     def _get_available_triggers(self, ctx_id: str, persona_data: dict) -> Dict[str, str]:
         """Extract trigger descriptions for triggers available in the current context."""
         available_triggers = {}
-        
-        # Get triggers from persona data
         triggers = persona_data.get('triggers', [])
-        
         for trigger in triggers:
             if trigger.get('parent_context') == ctx_id:
                 trigger_name = trigger.get('name', trigger['id'])
-                # Use the trigger name as both key and description for now
-                # Could be enhanced to include more details
                 available_triggers[trigger_name] = f"Available action: {trigger_name}"
-        
         return available_triggers
+
+    def _get_trigger_hints(self, ctx_id: str, persona_data: dict, hint_level: int) -> str:
+        """
+        Build a hint block from prompt_hint fields of triggers available in ctx_id.
+
+        Header and directive are fully data-driven:
+          persona hint_escalation[level] → atlas hint_escalation[level] → hint_levels.yaml → silent
+
+        hint_level: 0=silent, 1..3=escalating urgency (semantics defined in YAML, not here).
+        """
+        if hint_level == 0:
+            return ""
+
+        triggers = persona_data.get('triggers', [])
+        hints = [
+            t.get('prompt_hint', '')
+            for t in triggers
+            if t.get('parent_context') == ctx_id and t.get('prompt_hint', '')
+        ]
+        if not hints:
+            return ""
+
+        # Priority: persona override → global default → silent
+        level_cfg = (
+            persona_data.get('hint_escalation', {}).get(hint_level)
+            or self.default_hint_levels.get(hint_level, {})
+        )
+        if not level_cfg:
+            return ""
+
+        header = f"{level_cfg.get('header', 'HINT')}: {level_cfg.get('directive', '')}"
+        return "\n\n" + header + "\n" + "\n".join(f"- {h}" for h in hints)
 
     def _get_context_details(self, ctx_id: str, persona_data: dict) -> dict:
         """Get context details for the given context ID."""
@@ -327,7 +372,7 @@ class PromptOrchestrator:
         # 6. Get Oracle Interpretation Style
         oracle_style = p_data.get("properties", {}).get("oracle_interpretation", "a strange flicker of intuition")
         
-        return template.format(
+        rendered = template.format(
             context_name=ctx_details['name'],
             context_desc=ctx_details['desc'],
             location_name=loc_data['name'],
@@ -338,6 +383,10 @@ class PromptOrchestrator:
             persona_desc=p_data.get('description', 'No desc'),
             oracle_style=oracle_style
         )
+        # On greeting inject level=1 hints for the TARGET context — what this NPC is steering toward.
+        # Using target_ctx (not start ctx) because triggers live on the destination, not the start.
+        hint_block = self._get_trigger_hints(target_ctx, p_data, 1)
+        return rendered + hint_block
 
     def _format_pddl_plan(self, pddl_plan: List[str]) -> str:
         """Formats PDDL plan into readable steps."""
@@ -514,6 +563,9 @@ class PromptOrchestrator:
             readable_target = self._resolve_name(parts[-1]) if len(parts) > 1 else "Unknown"
             action_part = act_template.format(target=readable_target, action_name=clean_action)
 
-        return f"{system_part}\n\n{action_part}\n\nSTORYTELLING START:"
+        # Progressive hint injection: level escalates each turn player makes no PDDL progress.
+        hint_level = int(state.get('hint_level', 0))
+        hint_block = self._get_trigger_hints(ctx_id, p_data, hint_level)
+        return f"{system_part}\n\n{action_part}\n{hint_block}\n\nSTORYTELLING START:"
 
 orchestrator = PromptOrchestrator()

@@ -263,10 +263,18 @@ class SocialWorldAssembler:
         if dynamic_state and dynamic_state.get("current_mood"):
             mood = dynamic_state["current_mood"]
             if mood not in domain_moods:
+                # Append to caller's list so the mood type is declared in :objects.
+                # Callers must pass the same list they use for build_social_objects.
                 objects.append(f"{mood} - mood")
             init_facts.append(f"(current-mood {player_id} {mood})")
 
         return init_facts
+
+    # NOTE: build_social_init_facts appends a mood entry to the `objects` list
+    # when the player's current_mood is not already a known domain mood.
+    # This is intentional: callers must pass the mutable objects list built by
+    # build_social_objects so that the :objects section stays consistent with
+    # the :init facts. The side-effect is documented here to avoid confusion.
 
     def _add_equipment_facts(self, equipment: Dict[str, Any], player_id: str, init_facts: list[str]) -> None:
         def add_equip_facts(item_list, predicate):

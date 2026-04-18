@@ -20,6 +20,7 @@ locations:
       name: Temple Guardian
       description: "Protector of the Ancient Temple."
       personality: "Guardian stands before you, an unmoving sentinel of ancient stone. Its eyes, hollow sockets filled with swirling mist, seem to look through you"
+      social_persona: persona_sir_aric
     objects:
     - id: temple_door
       type: object

@@ -116,7 +116,7 @@ locations:
 - id: connecting_bridge
   type: location
   name: Connecting Bridge
-  description: A narrow bridge connecting the entrance to the main hall.
+  description: A narrow bridge connecting the entrance to the main hall. An orc mercenary sits on the railing, blocking the way.
   region: paladin_realm
   connections:
   - to: paladin_entrance
@@ -126,6 +126,18 @@ locations:
   contained_items: []
   contained_npcs: []
   contained_objects: []
+  contains:
+    npcs:
+    - id: npc_grakk
+      type: npc
+      name: Grakk Ironjaw
+      description: A massive orc mercenary blocking the bridge with casual menace.
+      personality: Blunt and opportunistic. Respects coin and steel equally. Not evil — just business.
+      speech_style: Short sentences. Direct demands. Occasional dark humor.
+      dialogue_quest: false
+      social_persona: persona_grakk
+      properties:
+        has_items: []
 - id: paladin_entrance
   type: location
   name: Paladin Entrance

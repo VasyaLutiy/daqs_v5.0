@@ -1,0 +1,44 @@
+# Locked requirements for DAQS v5.1 Enterprise Docker image
+# Generated from working daqs5 venv — 2026-04-14
+#
+# Only production dependencies (no torch, CUDA, audio, testing extras)
+
+fastapi==0.128.6
+uvicorn[standard]==0.40.0
+starlette==0.52.1
+
+streamlit==1.54.0
+
+google-genai==1.62.0
+google-auth==2.48.0
+openai==2.17.0
+
+unified-planning[fast-downward]==1.3.0
+
+pydantic==2.12.5
+PyYAML==6.0.3
+Jinja2==3.1.6
+dataclasses-json==0.6.7
+python-dotenv==1.2.1
+coloredlogs==15.0.1
+graphviz==0.21
+requests==2.32.5
+
+# Transitive deps pinned to avoid surprises
+anyio==4.12.1
+click==8.3.1
+httpx==0.28.1
+httpcore==1.0.9
+humanfriendly==10.0
+MarkupSafe==3.0.3
+packaging==26.0
+pillow==12.1.0
+typing_extensions==4.15.0
+typing-inspection==0.4.2
+annotated-types==0.7.0
+certifi==2026.1.4
+charset-normalizer==3.4.4
+idna==3.11
+urllib3==2.6.3
+h11==0.16.0
+sniffio==1.3.1

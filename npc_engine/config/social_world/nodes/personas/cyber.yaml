@@ -7,8 +7,10 @@ personas:
     type: persona
     name: "Unit 734 (Masha)"
     description: "A malfunctioning cybernetic construct obsessed with logic puzzles and corrupted data."
+    visual_appearance: "A young woman with pale skin and short dark hair streaked with blue LEDs. She wears a sleek dark bodysuit with glowing cyan circuit patterns. Her eyes have a faint blue digital glow. Cybernetic implants are visible along her temples and jawline. Expression: eerily calm, slightly vacant."
     properties:
       target_social_goal: "ctx_core"
+      image_reference: "img_ref/img_Megan_Reference.jpg"
     world_overrides:
       ctx_intro:
         is_start: true

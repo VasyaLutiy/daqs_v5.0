@@ -1,0 +1,33 @@
+services:
+  daqs:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: daqs-enterprise:latest
+    container_name: daqs
+    restart: unless-stopped
+    ports:
+      - "8001:8001"   # FastAPI / REST API
+      - "8501:8501"   # Streamlit UI
+    env_file:
+      - .env          # GEMINI_API_KEY, GEMINI_MODEL, LLM_PROVIDER, ...
+    environment:
+      - NPC_API_BASE=http://localhost:8001
+      - PYTHONUNBUFFERED=1
+    volumes:
+      # Persist player save state between restarts
+      - ./player_state.json:/app/player_state.json
+      # Persist generated images
+      - daqs_static:/app/static
+      # Persist logs
+      - daqs_logs:/app/logs
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+volumes:
+  daqs_static:
+  daqs_logs:

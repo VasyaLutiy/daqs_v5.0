@@ -2,6 +2,30 @@ id: atlas_orcs
 type: persona_group
 description: "Warriors of the Durotar clan."
 
+concepts:
+  - id: cpt_agreement
+    type: concept
+    name: "Blood Agreement"
+  - id: cpt_toll_paid
+    type: concept
+    name: "Toll Paid"
+  - id: cpt_orc_respect
+    type: concept
+    name: "Warrior Respect"
+
+# Atlas-level hint escalation — all orcs are blunt, never subtle.
+# Integer keys — do not quote them.
+hint_escalation:
+  1:
+    header: "ORC INSTINCT"
+    directive: "grunt and gesture vaguely — orcs imply, they never explain"
+  2:
+    header: "WARCHIEF LOGIC"
+    directive: "make the point obvious through action or direct demand — stay in character"
+  3:
+    header: "BLUNT FORCE"
+    directive: "state it outright — orc patience has a hard limit and it just ran out"
+
 personas:
   - id: persona_orc_loktar
     type: persona
@@ -89,3 +113,111 @@ personas:
         properties:
           is_locked: true
           required_concept: cpt_agreement
+
+  - id: persona_grakk
+    type: persona
+    name: "Grakk Ironjaw"
+    description: "A massive orc mercenary with iron-capped tusks and mismatched paladin armor stripped from the battlefield. Blocks the bridge with the casual authority of someone who has never once lost a toll argument."
+    tags: ["mercenary", "orc", "tollkeeper"]
+
+    properties:
+      target_social_goal: "ctx_grakk_passage"
+      behavior_on_enter: "active"
+      perform_quest_analysis: false
+      use_dynamic_generation: true
+      oracle_interpretation: "a sudden smell of iron and old blood, a mercenary's cold appraisal of your coin purse and your spine — in that order"
+
+    equipment:
+      weapons:
+        - id: item_spiked_club
+          name: "Spiked Iron Club"
+          pddl_tags: ["club", "heavy"]
+          visual_fragment: "a massive iron club studded with salvaged paladin shield-bolts"
+      clothes:
+        - id: item_salvaged_plate
+          name: "Salvaged Paladin Plate"
+          pddl_tags: ["armor", "heavy"]
+          visual_fragment: "mismatched plate armor with faded holy symbols — clearly taken from someone who no longer needed it"
+
+    behavior_rules:
+      - id: act_club_tap
+        mood: neutral
+        requires_holding_tag: heavy
+        narrative_template: "taps {item_name} against the stone railing — a rhythmic, patient warning"
+
+      - id: act_toll_stare
+        mood: neutral
+        requires_empty_hands: true
+        narrative_template: "crosses massive arms and fixes you with the flat stare of someone who has absolutely all day"
+
+      - id: act_raise_club
+        mood: angry
+        requires_holding_tag: club
+        narrative_template: "raises {item_name} an inch — not a swing, not yet, but the implication is loud"
+
+    contexts:
+      - id: ctx_grakk_block
+        type: context
+        name: "Bridge Blocked"
+        description: "Grakk sits on the railing of the narrow bridge, spiked club across his knees. The bridge is not wide enough to go around him."
+        connections:
+          - to: ctx_grakk_deal
+            direction: forward
+          - to: ctx_grakk_growl
+            direction: forward
+        properties:
+          is_start: true
+          induces_mood: "neutral"
+
+      - id: ctx_grakk_deal
+        type: context
+        name: "Toll Negotiation"
+        description: "Grakk slides off the railing and holds out a scarred hand. 'Toll. Bridge not free. Nothing in this realm free.'"
+        connections:
+          - to: ctx_grakk_passage
+            direction: forward
+          - to: ctx_grakk_growl
+            direction: forward
+        properties:
+          is_locked: false
+          induces_mood: "neutral"
+
+      - id: ctx_grakk_growl
+        type: context
+        name: "Orc Displeasure"
+        description: "Grakk takes one very deliberate step forward. The bridge stones crack slightly under his weight."
+        connections:
+          - to: ctx_grakk_deal
+            direction: forward
+        properties:
+          is_locked: false
+          induces_mood: "angry"
+
+      - id: ctx_grakk_passage
+        type: context
+        name: "Passage Granted"
+        description: "Grakk grunts, pockets whatever you offered, and steps aside with theatrical slowness. 'Smart. Grakk like smart ones. They live longer.'"
+        connections: []
+        properties:
+          is_locked: true
+          required_concept: cpt_toll_paid
+          induces_mood: "neutral"
+
+    triggers:
+      - id: trig_offer_shadow_coin
+        type: trigger
+        name: "Offer Black Iron Coin"
+        parent_context: ctx_grakk_deal
+        yields: cpt_toll_paid
+        requires_item: item_shadow_coin
+        prompt_hint: "That heavy black coin in your pack — shadow iron. Grakk's eyes go straight to it. Coin speaks where words fail."
+        properties:
+          requires_shared_items: ["item_shadow_coin"]
+
+      - id: trig_show_mighty_blade
+        type: trigger
+        name: "Show the Mighty Blade"
+        parent_context: ctx_grakk_deal
+        yields: cpt_toll_paid
+        requires_item: mighty_blade
+        prompt_hint: "He keeps glancing at your weapon. A warrior's toll is paid in steel — or at least the sight of it. Show him what you carry."

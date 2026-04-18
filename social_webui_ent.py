@@ -1,4 +1,5 @@
 import os
+import sys
 import json
 import re
 from pathlib import Path
@@ -173,7 +174,8 @@ if "social_messages" not in st.session_state:
 if "game_mode" not in st.session_state:
     st.session_state.game_mode = "WORLD"  # WORLD | SOCIAL
 if "visual_enabled" not in st.session_state:
-    st.session_state.visual_enabled = False
+    # Streamlit passes custom args after "--" separator: `streamlit run app.py -- --visual`
+    st.session_state.visual_enabled = "--visual" in sys.argv
 
 
 # --- UI rendering helpers ---
@@ -190,6 +192,17 @@ def render_sidebar():
             st.session_state.player_data = load_player_state()
             st.session_state.game_mode = "WORLD"
             st.rerun()
+
+        if st.button("Clear Image Cache"):
+            cache_dir = Path("static/images/locations")
+            deleted = 0
+            for f in cache_dir.glob("*.png"):
+                try:
+                    f.unlink()
+                    deleted += 1
+                except Exception:
+                    pass
+            st.success(f"Deleted {deleted} cached images.")
 
         st.divider()
 
@@ -269,6 +282,12 @@ def _handle_navigation(target_id: str):
         visi.append(target_id)
     save_player_state(player)
     _sync_world()
+    # If no cached image for this location — generate now (keeps spinner running)
+    if not Path(f"static/images/locations/{target_id}.png").exists():
+        try:
+            _post(f"{API_BASE}/world/image", {"location_id": target_id}, timeout=120)
+        except Exception:
+            pass
     st.rerun()
 
 
@@ -281,7 +300,7 @@ def _handle_pickup(item: Dict[str, Any]):
 
 
 def _start_social(npc: Dict[str, Any]):
-    persona_id = npc.get("social_persona", "persona_cyber")
+    persona_id = npc.get("social_persona") or "persona_cyber"
     can_quest = npc.get("dialogue_quest", False)
     try:
         res = api_social_init(persona_id, st.session_state.player_data, can_quest=can_quest)

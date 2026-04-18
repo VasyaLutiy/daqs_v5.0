@@ -52,6 +52,20 @@ concepts:
     type: concept
     name: "Intimidation Attempt"
 
+# Hint escalation for ALL elves in this atlas.
+# Integer keys (1/2/3) — do not quote them.
+# Individual personas can override per-level below.
+hint_escalation:
+  1:
+    header: "ELVEN INSTINCT"
+    directive: "let ancient wisdom color the air — never name the path directly"
+  2:
+    header: "FOREST WHISPER"
+    directive: "hint through metaphor and observation, staying fully in character"
+  3:
+    header: "ELVEN VERDICT"
+    directive: "state it as plain truth — elves waste no words when the moment demands"
+
 personas:
   - id: persona_dolores
     type: persona
@@ -110,6 +124,15 @@ personas:
           name: "Black Iron Coin"
           pddl_tags: ["token", "shadow"]
           visual_fragment: "a heavy coin made of black iron, etched with mysterious symbols"
+    # Dolores overrides levels 1 and 3; level 2 inherits from atlas (FOREST WHISPER).
+    hint_escalation:
+      1:
+        header: "SHADOW INSTINCT"
+        directive: "let suspicion color every word without naming the reason"
+      3:
+        header: "COLD PROPOSITION"
+        directive: "lay out the terms plainly — Dolores has no patience for fools"
+
     behavior_rules:
       - id: act_dagger_twirl
         mood: cynical

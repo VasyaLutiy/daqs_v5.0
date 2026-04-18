@@ -264,6 +264,7 @@ graph:
                 can_be_avoided: false
                 difficulty: hard
                 defeat_reward: guardian_blessing
+                social_persona: persona_sir_aric
 
           connections:
             - to: ancient_temple_entrance

@@ -1,3 +1,4 @@
+import re
 import jinja2
 from pathlib import Path
 from typing import Dict, Any, Set, Tuple
@@ -17,47 +18,52 @@ class PDDLOrchestrator:
         social_dir = Path("npc_engine/config/social_world")
         self.renderer = PDDLTemplateRenderer([self.logic_dir, social_dir])
 
-    def _extract_constants(self, persona_data: Dict[str, Any]) -> Dict[str, Set[str]]:
-        constants = {"tags": set(), "moods": set(), "actions": set()}
+    def _extract_constants(self, persona_data: Dict[str, Any]) -> Dict[str, list]:
+        """Extract tags/moods/action IDs from persona data.
+
+        Returns sorted lists (not sets) so domain template rendering is
+        deterministic regardless of dict iteration order.
+        """
+        tags: Set[str] = set()
+        moods: Set[str] = set()
+        actions: Set[str] = set()
+
         if not persona_data:
-            return constants
-            
-        # From Rules
-        if "behavior_rules" in persona_data:
-            for rule in persona_data["behavior_rules"]:
-                if "id" in rule: constants["actions"].add(rule["id"])
-                if "mood" in rule: constants["moods"].add(rule["mood"])
-                if "requires_holding_tag" in rule and rule["requires_holding_tag"]:
-                        constants["tags"].add(rule["requires_holding_tag"])
-                if "requires_wearing_tag" in rule and rule["requires_wearing_tag"]:
-                        constants["tags"].add(rule["requires_wearing_tag"])
-        
-        # From Equipment
-        if "equipment" in persona_data:
-            for cat in persona_data["equipment"].values():
-                for item in cat:
-                    if "pddl_tags" in item:
-                        for tag in item["pddl_tags"]:
-                            constants["tags"].add(tag)
-                            
-        return constants
+            return {"tags": [], "moods": [], "actions": []}
+
+        # From behavior_rules
+        for rule in persona_data.get("behavior_rules", []):
+            if "id" in rule:
+                actions.add(rule["id"])
+            if "mood" in rule:
+                moods.add(rule["mood"])
+            if rule.get("requires_holding_tag"):
+                tags.add(rule["requires_holding_tag"])
+            if rule.get("requires_wearing_tag"):
+                tags.add(rule["requires_wearing_tag"])
+
+        # From equipment pddl_tags
+        for cat in persona_data.get("equipment", {}).values():
+            for item in cat:
+                for tag in item.get("pddl_tags", []):
+                    tags.add(tag)
+
+        return {
+            "tags": sorted(tags),
+            "moods": sorted(moods),
+            "actions": sorted(actions),
+        }
 
     def get_domain(self, mode: str, persona_data: Dict[str, Any] = None, constants: Dict[str, Set[str]] = None) -> str:
         """
-        Gets the PDDL domain. Supports V2 dynamic domains if persona has behavior rules.
+        Gets the PDDL domain. Social mode uses social_domain_v2.pddl.j2.
         """
         if mode == "social":
-            template_path = "social/social_unified_v4.pddl.j2"
             try:
-                logger.info(f"Using V4 Social Domain Template: {template_path}")
-                return self.renderer.render(template_path, {"persona": persona_data, "constants": constants})
+                return self.renderer.render("social_domain.pddl.j2", {"persona": persona_data, "constants": constants})
             except jinja2.TemplateNotFound:
-                logger.error(f"V4 Template not found: {template_path}")
-                try:
-                    return self.renderer.render("social_domain_v2.pddl.j2", {"persona": persona_data, "constants": constants})
-                except: 
-                    logger.error("Failed to load social domain template fallback.")
-                    return ""
+                logger.error("Social domain template not found: social_domain.pddl.j2")
+                return ""
         # Non-social modes
         domain_path = self.logic_dir / mode / "domain.pddl"
         try:
@@ -250,7 +256,6 @@ class PDDLOrchestrator:
                 }
 
             # Goal Extraction with Support for Custom/Visual Goals
-            import re
             match = re.search(r'\(in-context\s+\w+\s+(\w+)\)', goal_pddl)
             custom_goal = None
             
@@ -349,6 +354,9 @@ class PDDLOrchestrator:
         if extra_items:
             for item_id in extra_items:
                 init_facts.append(f"(has-item {player_id} {item_id})")
+
+        # Deduplicate and sort for deterministic, planner-safe output
+        init_facts = sorted(set(init_facts))
 
         return self.renderer.render(
             "social/problem.pddl.j2",

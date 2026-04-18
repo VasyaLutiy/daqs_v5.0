@@ -1,0 +1,13 @@
+# Global fallback hint escalation.
+# Used when a persona/atlas defines no hint_escalation of its own.
+# Keys MUST be integers (1, 2, 3) — do not quote them.
+levels:
+  1:
+    header: "SUBCONSCIOUS GUIDANCE"
+    directive: "weave subtly into atmosphere and tone — never state directly"
+  2:
+    header: "INNER SENSE"
+    directive: "drop as a natural in-character observation or question"
+  3:
+    header: "CLEAR SIGNAL"
+    directive: "make this unmistakably obvious to the player — stay in character"

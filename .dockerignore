@@ -1,0 +1,64 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Virtual environments
+.venv/
+venv/
+env/
+daqs5/
+
+# Secrets — never bake these into the image
+.env
+.env.*
+*.env
+
+# Test artefacts
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.coverage
+coverage.xml
+htmlcov/
+
+# Git
+.git/
+.gitignore
+
+# Logs and generated runtime files
+logs/
+*.log
+generated/
+
+# Static generated images (not part of source)
+static/
+
+# Docs and notes
+*.md
+CHANGELOG.md
+CoreLogic.md
+DAQS_v4_Architecture.md
+DIALOGUE_QUESTS_NPC_ATLAS.md
+PDDL_*.md
+PERSONA_ATLAS_MANUAL.md
+Meta-Awareness-Npc-Readme.md
+ToDo_Enterprise_Migration_code_Plan.md
+PLAN_2026_APR_14.md
+
+# Dev tools
+.vscode/
+.idea/
+*.swp
+
+# Large test/demo files
+dialogue_test_Dolores.json
+multiple_plans.json
+generated_regions.dot
+lang_graph_*.py
+world_builder.py
+test_auto_simulation.py
+test_npc_stats.py
+validate_yaml.py

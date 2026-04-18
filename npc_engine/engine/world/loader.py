@@ -52,7 +52,7 @@ def create_node_from_data(data: dict) -> WorldNode:
             speech_style=data.get("speech_style")
         )
         node.properties["dialogue_quest"] = data.get("dialogue_quest", False)
-        node.properties["social_persona"] = data.get("social_persona", "persona_cyber")
+        node.properties["social_persona"] = data.get("social_persona")  # None if not explicitly set
         return node
     else:
         return WorldNode(**base_kwargs)

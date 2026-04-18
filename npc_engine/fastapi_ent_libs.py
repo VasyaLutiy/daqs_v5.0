@@ -88,7 +88,7 @@ def collect_location_data(world: WorldGraph, location_id: str, goal: Optional[st
                         "speech_style": getattr(npc_node, "speech_style", ""),
                         "items": npc_node.properties.get("has_items", []),
                         "dialogue_quest": npc_node.properties.get("dialogue_quest", False),
-                        "social_persona": npc_node.properties.get("social_persona", "persona_cyber"),
+                        "social_persona": npc_node.properties.get("social_persona") or "persona_cyber",
                     }
                 )
 

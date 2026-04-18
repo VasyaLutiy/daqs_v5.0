@@ -3,10 +3,12 @@ Enterprise FastAPI entrypoint: API-first planning/service layer.
 Keeps all planning/world logic server-side; clients call HTTP endpoints.
 """
 
+import asyncio
+import functools
 import uuid
 from pathlib import Path
 from typing import Dict, Any, Tuple, Optional, List
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
@@ -19,6 +21,11 @@ from npc_engine.engine.master.pddl_orchestrator import PDDLOrchestrator
 from npc_engine.engine.master.hooks.registry import execute_hook
 import npc_engine.engine.master.hooks.quest_hooks  # ensure hooks registered
 from npc_engine.version import __version__
+from npc_engine.engine.dialogue.state import SocialState
+from npc_engine.engine.dialogue.engine import DialogueEngine, DialogueMove
+from npc_engine.engine.compiler import DomainCompiler, CompiledDialogueGraph
+from npc_engine.engine.quest.planner import QuestPlanner, QuestPlan
+from npc_engine.engine.session_store import SessionStore
 from npc_engine.fastapi_ent_libs import (
     load_world,
     load_player_from_json_data,
@@ -41,9 +48,43 @@ WORLD_CONFIG_PATH = BASE_DIR / "config" / "world"
 CONFIG_DIR = BASE_DIR / "config"
 
 app = FastAPI(title="NPC Engine API (Enterprise)", version=__version__)
-SOCIAL_SESSIONS: Dict[str, Dict[str, Any]] = {}
+SESSION_STORE = SessionStore(ttl_seconds=3600.0, max_sessions=10_000)
 GAME_ENGINE = GameEngine(CONFIG_DIR)
 VIS_GEN = VisualGenerator()
+
+# Compiled dialogue graphs — populated at startup by DomainCompiler
+DIALOGUE_GRAPHS: Dict[str, CompiledDialogueGraph] = {}
+
+# Async quest planner singleton — populated at startup
+QUEST_PLANNER: Optional[QuestPlanner] = None
+
+
+@app.on_event("startup")
+async def _startup_compile_domains() -> None:
+    """Compile all persona YAMLs and initialise QuestPlanner at startup."""
+    global DIALOGUE_GRAPHS, QUEST_PLANNER
+    try:
+        compiler = DomainCompiler()
+        DIALOGUE_GRAPHS = compiler.compile_all(CONFIG_DIR)
+        logger.info(
+            f"[startup] DomainCompiler: loaded {len(DIALOGUE_GRAPHS)} persona(s): "
+            f"{sorted(DIALOGUE_GRAPHS)}"
+        )
+    except Exception as exc:
+        logger.error(f"[startup] DomainCompiler failed: {exc}", exc_info=True)
+
+    try:
+        world = load_world_ent()
+        QUEST_PLANNER = QuestPlanner(world)
+        logger.info("[startup] QuestPlanner initialised")
+    except Exception as exc:
+        logger.error(f"[startup] QuestPlanner init failed: {exc}", exc_info=True)
+
+
+def _get_dialogue_engine(persona_id: str) -> DialogueEngine | None:
+    """Return a DialogueEngine for persona_id if compiled, else None."""
+    graph = DIALOGUE_GRAPHS.get(persona_id)
+    return DialogueEngine(graph) if graph else None
 
 
 # === Schemas ===
@@ -82,6 +123,8 @@ class HealthResponse(BaseModel):
     status: str
     version: str
     up_available: bool
+    personas_loaded: int = 0
+    persona_ids: List[str] = []
 
 
 class SocialInitRequest(BaseModel):
@@ -89,7 +132,6 @@ class SocialInitRequest(BaseModel):
     active_context: Optional[str] = None
     target_goal: Optional[str] = None
     can_quest: bool = True
-    player_state: Optional[Dict[str, Any]] = None
     player_state: Optional[Dict[str, Any]] = None
 
 
@@ -166,16 +208,18 @@ def _session_key(persona_id: str, session_id: Optional[str]) -> str:
     return f"{persona_id}:{session_id or 'default'}"
 
 
-def _get_session(persona_id: str, session_id: Optional[str], default_state: Dict[str, Any]) -> Dict[str, Any]:
+async def _get_session(
+    persona_id: str, session_id: Optional[str], default_state: Dict[str, Any]
+) -> Dict[str, Any]:
     key = _session_key(persona_id, session_id)
-    if key not in SOCIAL_SESSIONS:
-        SOCIAL_SESSIONS[key] = default_state
-    return SOCIAL_SESSIONS[key]
+    return await SESSION_STORE.get_or_create(key, default_state)
 
 
-def _save_session(persona_id: str, session_id: Optional[str], state: Dict[str, Any]) -> None:
+async def _save_session(
+    persona_id: str, session_id: Optional[str], state: Dict[str, Any]
+) -> None:
     key = _session_key(persona_id, session_id)
-    SOCIAL_SESSIONS[key] = state
+    await SESSION_STORE.set(key, state)
 
 
 def _has_item(player_state: Dict[str, Any], item_id: str) -> bool:
@@ -220,14 +264,6 @@ def _maybe_update_target_goal(social_state: Dict[str, Any]) -> None:
         social_state["target_goal"] = hint
 
 
-def _apply_shadow_goal_logic(social_state: Dict[str, Any]) -> None:
-    """
-    Special-case progression for Dolores shadow path:
-    if the player has rumor, token, and quest_hard while in shadow_entry,
-    bump target_goal to ctx_joined and grant partnership offer concept.
-    """
-    return  # use StateManager/valid moves instead of manual injections
-
 # === Helpers (wrappers around shared libs) ===
 def load_world_ent() -> WorldGraph:
     return load_world(WORLD_CONFIG_PATH)
@@ -236,27 +272,34 @@ def load_world_ent() -> WorldGraph:
 # === Endpoints ===
 @app.get("/health", response_model=HealthResponse)
 async def health():
-    return HealthResponse(status="ok", version=__version__, up_available=True)
+    return HealthResponse(
+        status="ok",
+        version=__version__,
+        up_available=True,
+        personas_loaded=len(DIALOGUE_GRAPHS),
+        persona_ids=sorted(DIALOGUE_GRAPHS),
+    )
 
 
 @app.get("/world/state")
 async def world_state(player_id: str = "player_001", location: str = "forest_entrance", goal: Optional[str] = None):
     """Return world slice for UI navigation."""
     request_id = str(uuid.uuid4())
-    start_ts = datetime.utcnow()
+    start_ts = datetime.now(timezone.utc)
     try:
         world = load_world_ent()
         # Minimal player init
         player = PlayerState(player_id=player_id, current_location=location)
         npcs, exits, items = collect_location_data(world, player.current_location, goal)
         available_quests = collect_available_quests(world, player)
-        duration_ms = (datetime.utcnow() - start_ts).total_seconds() * 1000
+
+        duration_ms = (datetime.now(timezone.utc) - start_ts).total_seconds() * 1000
         return {
             "status": "success",
             "request_id": request_id,
             "metadata": {
                 "version": __version__,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
                 "player_id": player_id,
                 "goal": goal,
                 "location": location,
@@ -275,6 +318,58 @@ async def world_state(player_id: str = "player_001", location: str = "forest_ent
         raise HTTPException(status_code=500, detail=str(e))
 
 
+class LocationImageRequest(BaseModel):
+    location_id: str
+
+
+@app.post("/world/image")
+async def world_image(request: LocationImageRequest):
+    """Generate (or return cached) location image. Blocks until ready.
+    If the location has an NPC with a reference image, renders an establishing shot with that character.
+    """
+    loc_data = orchestrator.locations_data.get(request.location_id, {})
+    loc_name = loc_data.get("name", request.location_id.replace("_", " ").title())
+    loc_desc = loc_data.get("description", "An adventurous location.")
+
+    # Collect ALL NPCs at this location for the establishing shot.
+    npc_list = []
+    try:
+        world = load_world_ent()
+        npcs, _, _ = collect_location_data(world, request.location_id)
+        for npc in npcs:
+            world_node = world.get_node(npc["id"])
+            explicit_persona = world_node.properties.get("social_persona") if world_node else None
+            if explicit_persona:
+                persona_data = orchestrator.personas_data.get(explicit_persona, {})
+                image_ref = persona_data.get("properties", {}).get("image_reference")
+                npc_list.append({
+                    "name": persona_data.get("name", npc.get("name", explicit_persona)),
+                    "desc": persona_data.get("visual_appearance") or persona_data.get("description", ""),
+                    "ref_path": str(Path("npc_engine/config/social_world/nodes/personas") / image_ref) if image_ref else None,
+                })
+            elif npc.get("description") or npc.get("personality"):
+                # No explicit persona — use NPC's own world description
+                npc_list.append({
+                    "name": npc.get("name", ""),
+                    "desc": npc.get("personality") or npc.get("description", ""),
+                    "ref_path": None,
+                })
+    except Exception as exc:
+        logger.warning(f"[world/image] NPC lookup failed: {exc}")
+
+    loop = asyncio.get_event_loop()
+    image_path = await loop.run_in_executor(
+        None,
+        functools.partial(
+            VIS_GEN.generate_location_visual,
+            request.location_id, loc_name, loc_desc,
+            "Fantasy World", None,
+            npc_list or None,
+        ),
+    )
+    return {"image_path": image_path}
+
+
 @app.post("/world/graph", response_model=GraphResponse)
 async def world_graph(request: GraphRequest):
     """Return DOT graph for world map."""
@@ -289,7 +384,16 @@ async def world_graph(request: GraphRequest):
 @app.post("/plan/exploration", response_model=PlanResponse)
 async def plan_exploration(request: PlanRequest):
     try:
-        result = process_request_lib(request.input_json, WORLD_CONFIG_PATH, oracle_mode=request.oracle_mode)
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(
+            None,
+            functools.partial(
+                process_request_lib,
+                request.input_json,
+                WORLD_CONFIG_PATH,
+                oracle_mode=request.oracle_mode,
+            ),
+        )
         return PlanResponse(**result)
     except Exception as e:
         logger.error(f"/plan/exploration failed: {e}", exc_info=True)
@@ -302,12 +406,13 @@ async def quest_difficulty(request: QuestDifficultyRequest):
         goal = request.goal
         if not goal:
             return QuestDifficultyResponse(status="ok", concept="cpt_quest_none", plan_length=0)
-        world = load_world_ent()
         player = PlayerState(player_id="player_001", current_location="forest_entrance")
         player.goal = goal
-        # Use the advanced hook via execute_hook
-        concept = execute_hook("analyze_quest_difficulty", player, world)
-        # No direct plan length without solving again; leave 0 for now
+        if QUEST_PLANNER:
+            concept = await QUEST_PLANNER.assess_difficulty(player)
+        else:
+            world = load_world_ent()
+            concept = execute_hook("analyze_quest_difficulty", player, world)
         return QuestDifficultyResponse(status="ok", concept=concept, plan_length=0)
     except Exception as e:
         logger.error(f"/quest/difficulty failed: {e}", exc_info=True)
@@ -320,17 +425,23 @@ async def quest_accept(request: QuestAcceptRequest):
     Accept a quest: set goal, plan (oracle), and generate mission narrative payload.
     """
     req_id = str(uuid.uuid4())
-    start_ts = datetime.utcnow()
+    start_ts = datetime.now(timezone.utc)
     try:
         player_data = request.player_state.copy()
         player_data["goal"] = request.quest_goal
         player, goal = load_player_from_json_data(player_data)
-        world = load_world_ent()
-        plan_result, quest_steps, error_msg = generate_plan_and_quest(world, player, goal, request.oracle_mode)
+        if QUEST_PLANNER:
+            quest_plan = await QUEST_PLANNER.plan_quest(player, goal, oracle_mode=request.oracle_mode)
+            plan_result = quest_plan.steps or None
+            quest_steps = quest_plan.quest_steps
+            error_msg = quest_plan.error
+        else:
+            world = load_world_ent()
+            plan_result, quest_steps, error_msg = generate_plan_and_quest(world, player, goal, request.oracle_mode)
         payload = social_llm.generate_quest_mission(request.social_state, plan_result or [], request.quest_name)
         meta = {
             "request_id": req_id,
-            "duration_ms": (datetime.utcnow() - start_ts).total_seconds() * 1000,
+            "duration_ms": (datetime.now(timezone.utc) - start_ts).total_seconds() * 1000,
             "error": error_msg,
             "oracle_used": request.oracle_mode,
             "goal": goal,
@@ -352,7 +463,16 @@ async def quest_accept(request: QuestAcceptRequest):
 async def process_endpoint(request: PlanRequest):
     """Compatibility endpoint mirroring /plan/exploration."""
     try:
-        result = process_request_lib(request.input_json, WORLD_CONFIG_PATH, oracle_mode=request.oracle_mode)
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(
+            None,
+            functools.partial(
+                process_request_lib,
+                request.input_json,
+                WORLD_CONFIG_PATH,
+                oracle_mode=request.oracle_mode,
+            ),
+        )
         return PlanResponse(**result)
     except Exception as e:
         logger.error(f"/process failed: {e}", exc_info=True)
@@ -363,48 +483,63 @@ async def process_endpoint(request: PlanRequest):
 async def social_init(request: SocialInitRequest):
     """Return persona metadata/start context for social interactions."""
     request_id = str(uuid.uuid4())
-    start_ts = datetime.utcnow()
+    start_ts = datetime.now(timezone.utc)
     try:
         orch = PDDLOrchestrator()
         meta = orch.get_persona_metadata(request.persona_id)
         start_ctx = request.active_context or meta.get("start_context", "ctx_intro")
         target_goal = request.target_goal or meta.get("target_goal", "ctx_core")
-        social_state = {
-            "persona_id": request.persona_id,
-            "current_context": start_ctx,
-            "target_goal": target_goal,
-            "concepts": [],
-            "visited_contexts": [start_ctx],
-            "unlocked_contexts": [],
-            "exhausted_triggers": [],
-            "shared_items": [],
+
+        # Build typed SocialState — single source of truth for planning fields
+        state = SocialState(
+            persona_id=request.persona_id,
+            current_context=start_ctx,
+            goal_context=target_goal,
+            concepts=frozenset(),
+            visited_contexts=frozenset([start_ctx]),
+            unlocked_contexts=frozenset(),
+            exhausted_triggers=frozenset(),
+            shared_items=frozenset(),
+            current_mood="",
+            can_quest=request.can_quest,
+            oracle_path=None,
+        )
+
+        # Session-layer fields that live alongside the typed state
+        current_location = request.player_state.get("location") if request.player_state else "unknown"
+        session_extras: Dict[str, Any] = {
             "history": [],
             "metadata": meta,
-            "current_location": request.player_state.get("location") if request.player_state else "unknown",
+            "current_location": current_location,
             "active_persona": request.persona_id,
-            "can_quest": request.can_quest,
+            "available_moves": [],
         }
 
-        # Precompute available moves for client-side action shortcuts
+        # Precompute available moves (DialogueEngine when compiled, legacy fallback)
         try:
-            state_for_moves = social_state.copy()
-            state_for_moves["player_data"] = request.player_state or {}
-            social_state["available_moves"] = GAME_ENGINE.get_valid_moves(state_for_moves)
+            _de = _get_dialogue_engine(request.persona_id)
+            if _de:
+                session_extras["available_moves"] = [m.pddl_str for m in _de.get_valid_moves(state)]
+            else:
+                state_for_moves = {**state.to_dict(), **session_extras, "player_data": request.player_state or {}}
+                session_extras["available_moves"] = GAME_ENGINE.get_valid_moves(state_for_moves)
         except Exception:
-            social_state["available_moves"] = []
+            pass
 
-        quest_concept = None
+        # Inject quest-difficulty concept if applicable
         if request.can_quest and request.player_state:
             try:
-                world = load_world_ent()
-                player, goal = load_player_from_json_data(request.player_state)
-                player.goal = goal
-                quest_concept = execute_hook("analyze_quest_difficulty", player, world)
+                player, _goal = load_player_from_json_data(request.player_state)
+                player.goal = _goal
+                if QUEST_PLANNER:
+                    quest_concept = await QUEST_PLANNER.assess_difficulty(player)
+                else:
+                    world = load_world_ent()
+                    quest_concept = execute_hook("analyze_quest_difficulty", player, world)
                 if quest_concept and quest_concept != "cpt_quest_none":
-                    if quest_concept not in social_state["concepts"]:
-                        social_state["concepts"].append(quest_concept)
+                    state = state.with_concept(quest_concept)
             except Exception:
-                quest_concept = None
+                pass
 
         contexts_map = meta.get("contexts", {})
 
@@ -412,31 +547,38 @@ async def social_init(request: SocialInitRequest):
             ctx = contexts_map.get(ctx_id, {})
             props = ctx.get("properties", {})
             req = props.get("required_concept")
-            if req and req not in social_state.get("concepts", []):
+            if req and req not in state.concepts:
                 return False
             combo = props.get("required_combo")
-            if combo and not all(c in social_state.get("concepts", []) for c in combo):
+            if combo and not all(c in state.concepts for c in combo):
                 return False
             return True
 
-        if not _is_reachable(target_goal):
+        if not _is_reachable(state.goal_context):
             start_ctx_data = contexts_map.get(start_ctx, {})
             for conn in start_ctx_data.get("connections", []):
                 cand = conn.get("to")
                 if cand and _is_reachable(cand):
-                    target_goal = cand
-                    social_state["target_goal"] = cand
+                    state = state.with_goal(cand)
                     break
 
-        _apply_shadow_goal_logic(social_state)
+        # _maybe_update_target_goal expects dict — pass merged view
+        social_state = {**state.to_dict(), **session_extras}
         _maybe_update_target_goal(social_state)
+        # Sync goal back if helper changed it
+        if social_state.get("target_goal") != state.goal_context:
+            state = state.with_goal(social_state["target_goal"])
+
+        target_goal = state.goal_context
 
         # Oracle preview of requirements for intro (best-effort)
         quest_keys = []
         has_secrets = bool(meta.get("secrets"))
         if request.can_quest and not has_secrets:
             try:
-                res = GAME_ENGINE.get_path_requirements(start_ctx, target_goal, map_key="contexts", state=social_state)
+                res = GAME_ENGINE.get_path_requirements(
+                    start_ctx, target_goal, map_key="contexts", state=social_state
+                )
                 quest_keys = res[0] if res else []
             except Exception:
                 quest_keys = []
@@ -447,14 +589,13 @@ async def social_init(request: SocialInitRequest):
         try:
             persona_data = orchestrator.personas_data.get(request.persona_id, {})
             persona_name = persona_data.get("name", request.persona_id)
-            persona_desc = persona_data.get("description", "A mysterious figure.")
+            persona_desc = persona_data.get("visual_appearance") or persona_data.get("description", "A mysterious figure.")
             image_ref = persona_data.get("properties", {}).get("image_reference")
             image_ref_path = None
             if image_ref:
                 image_ref_path = str(Path("npc_engine/config/social_world/nodes/personas") / image_ref)
-            loc_id = social_state.get("current_location", "unknown")
-            loc_data = orchestrator.locations_data.get(loc_id, {})
-            loc_name = loc_data.get("name", loc_id)
+            loc_data = orchestrator.locations_data.get(current_location, {})
+            loc_name = loc_data.get("name", current_location)
             image_path = VIS_GEN.generate_scene_visual(
                 reply_payload.get("scene_description", ""),
                 persona_name,
@@ -467,17 +608,20 @@ async def social_init(request: SocialInitRequest):
             image_path = None
 
         history = [{"role": "assistant", "content": reply_payload, "image": image_path}] if reply_payload else []
-        social_state["history"] = history
-        _save_session(request.persona_id, None, social_state)
+        session_extras["history"] = history
 
-        duration_ms = (datetime.utcnow() - start_ts).total_seconds() * 1000
+        # Persist: merge typed state back to dict for the session store
+        full_session = {**state.to_dict(), **session_extras}
+        await _save_session(request.persona_id, None, full_session)
+
+        duration_ms = (datetime.now(timezone.utc) - start_ts).total_seconds() * 1000
         return SocialInitResponse(
             status="success",
             persona_id=request.persona_id,
             start_context=start_ctx,
             target_goal=target_goal,
             metadata=meta,
-            social_state=social_state,
+            social_state=full_session,
             history=history,
             reply=reply_payload,
             image_path=image_path,
@@ -494,32 +638,36 @@ async def social_init(request: SocialInitRequest):
 async def social_message(request: SocialMessageRequest):
     """Social dialogue backend using GameEngine + LLM."""
     request_id = str(uuid.uuid4())
-    start_ts = datetime.utcnow()
+    start_ts = datetime.now(timezone.utc)
     try:
         persona_id = request.persona_id
+
+        # Reconstruct typed SocialState from incoming dict
+        state = SocialState.from_dict({**request.social_state, "persona_id": persona_id})
+
         base_state = {
-            "persona_id": persona_id,
-            "current_context": request.social_state.get("current_context", "ctx_intro"),
-            "target_goal": request.social_state.get("target_goal", "ctx_core"),
-            "concepts": request.social_state.get("concepts", []),
-            "visited_contexts": request.social_state.get("visited_contexts", []),
-            "unlocked_contexts": request.social_state.get("unlocked_contexts", []),
-            "exhausted_triggers": request.social_state.get("exhausted_triggers", []),
-            "shared_items": request.social_state.get("shared_items", []),
+            **state.to_dict(),
             "history": request.social_state.get("history", []),
             "metadata": request.social_state.get("metadata", {}),
             "active_persona": request.social_state.get("active_persona", persona_id),
             "current_location": request.player_state.get("location", "unknown"),
         }
-        session = _get_session(persona_id, request.session_id, base_state)
+        session = await _get_session(persona_id, request.session_id, base_state)
 
         user_msg = {"role": "user", "content": request.message}
         session.setdefault("history", []).append(user_msg)
 
         # Compute available moves
-        state_for_moves = session.copy()
-        state_for_moves["player_data"] = request.player_state
-        valid_moves = GAME_ENGINE.get_valid_moves(state_for_moves)
+        de = _get_dialogue_engine(persona_id)
+        if de:
+            typed_moves: list[DialogueMove] = de.get_valid_moves(state)
+            valid_moves: list[str] = [m.pddl_str for m in typed_moves]
+            _move_map: dict[str, DialogueMove] = {m.pddl_str: m for m in typed_moves}
+        else:
+            state_for_moves = session.copy()
+            state_for_moves["player_data"] = request.player_state
+            valid_moves = GAME_ENGINE.get_valid_moves(state_for_moves)
+            _move_map = {}
 
         # Optional explicit action bypass (e.g., UI shortcut like sharing the coin)
         chosen_action = None
@@ -532,26 +680,37 @@ async def social_message(request: SocialMessageRequest):
                 logger.info(f"[social_message] Explicit action rejected (not valid or guard failed): {request.action}")
         if not chosen_action:
             # Fallback to NLU
-            nlu_action = social_llm.get_social_intent(request.message, state_for_moves, valid_moves)
+            nlu_action = social_llm.get_social_intent(request.message, session, valid_moves)
             if nlu_action and nlu_action in valid_moves:
                 chosen_action = nlu_action
 
         if chosen_action:
-            GAME_ENGINE.apply_action(chosen_action, session)
+            if de and chosen_action in _move_map:
+                # Pure-function FSM: produce new state, merge into session
+                new_state = de.apply_move(_move_map[chosen_action], state)
+                session.update(new_state.to_dict())
+            else:
+                GAME_ENGINE.apply_action(chosen_action, session)
+            # do_act_* are pure narrative — no PDDL state change, don't count as progress
+            if not chosen_action.startswith("do_"):
+                session['hint_level'] = 0
+            else:
+                session['hint_level'] = min(int(session.get('hint_level', 0)) + 1, 3)
         else:
             chosen_action = None
+            # Player is stuck — escalate hint level (cap at 3: direct)
+            session['hint_level'] = min(int(session.get('hint_level', 0)) + 1, 3)
 
         # Narrative generation
         payload = social_llm.generate_social_narrative(chosen_action or "talk", session, request.message)
 
-        _apply_shadow_goal_logic(session)
         _maybe_update_target_goal(session)
 
         image_path = None
         try:
             persona_data = orchestrator.personas_data.get(persona_id, {})
             persona_name = persona_data.get("name", persona_id)
-            persona_desc = persona_data.get("description", "A mysterious figure.")
+            persona_desc = persona_data.get("visual_appearance") or persona_data.get("description", "A mysterious figure.")
             image_ref = persona_data.get("properties", {}).get("image_reference")
             image_ref_path = None
             if image_ref:
@@ -563,22 +722,24 @@ async def social_message(request: SocialMessageRequest):
             cached_loc = Path("static/images/locations") / f"{loc_id}.png"
             location_ref_path = str(cached_loc) if cached_loc.exists() else None
 
-            if "scene_description" in payload:
-                image_path = VIS_GEN.generate_scene_visual(
-                    payload.get("scene_description", ""),
-                    persona_name,
-                    persona_desc,
-                    loc_name,
-                    image_ref_path=image_ref_path,
-                    location_ref_path=location_ref_path,
-                )
+            scene_desc = payload.get("scene_description", "") if isinstance(payload, dict) else ""
+            if not scene_desc:
+                scene_desc = f"{persona_name} responds in {loc_name}."
+            image_path = VIS_GEN.generate_scene_visual(
+                scene_desc,
+                persona_name,
+                persona_desc,
+                loc_name,
+                image_ref_path=image_ref_path,
+                location_ref_path=location_ref_path,
+            )
         except Exception:
             image_path = None
 
         session.setdefault("history", []).append({"role": "assistant", "content": payload, "image": image_path})
-        _save_session(persona_id, request.session_id, session)
+        await _save_session(persona_id, request.session_id, session)
 
-        duration_ms = (datetime.utcnow() - start_ts).total_seconds() * 1000
+        duration_ms = (datetime.now(timezone.utc) - start_ts).total_seconds() * 1000
         return SocialMessageResponse(
             status="success",
             reply=payload,
@@ -602,14 +763,14 @@ async def social_message(request: SocialMessageRequest):
 def process_request(input_data: Dict[str, Any], oracle_mode: bool = False) -> Dict[str, Any]:
     """Wrapper around enterprise libs to keep response metadata consistent."""
     request_id = str(uuid.uuid4())
-    start_ts = datetime.utcnow()
+    start_ts = datetime.now(timezone.utc)
     result = process_request_lib(input_data, WORLD_CONFIG_PATH, oracle_mode=oracle_mode)
 
-    duration_ms = (datetime.utcnow() - start_ts).total_seconds() * 1000
+    duration_ms = (datetime.now(timezone.utc) - start_ts).total_seconds() * 1000
     meta = result.setdefault("metadata", {})
     meta.setdefault("version", __version__)
     meta["request_id"] = request_id
-    meta["timestamp"] = datetime.utcnow().isoformat()
+    meta["timestamp"] = datetime.now(timezone.utc).isoformat()
     result["duration_ms"] = duration_ms
     result["oracle_used"] = oracle_mode
     return result

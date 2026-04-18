@@ -6,9 +6,8 @@ from . import logger
 from .planner_libs import (
     diagnose_planning_failure,
     save_pddl_files,
-    validate_problem_predicates,
-    validate_problem_types,
 )
+from .pddl_validator import validate_domain_problem_pair
 from .pddl_engines import UnifiedPlanningEngine
 from ..logging_config import get_component_level
 from ..world.player_state import PlayerState
@@ -60,11 +59,11 @@ class MasterPlanner:
         if world_level == 'DEBUG':
             domain_file, problem_file = save_pddl_files(self.pddl_output_dir, domain_pddl, problem_pddl, player_id)
         
-        for validator in (validate_problem_predicates, validate_problem_types):
-            validation_error = validator(domain_pddl, problem_pddl)
-            if validation_error:
-                logger.error(validation_error)
-                return None, validation_error
+        validation_errors = validate_domain_problem_pair(domain_pddl, problem_pddl)
+        if validation_errors:
+            msg = "; ".join(validation_errors)
+            logger.error(f"PDDL validation failed: {msg}")
+            return None, msg
 
         # Use unified_planning engine to solve
         plan = self.engine.solve(domain_pddl, problem_pddl)

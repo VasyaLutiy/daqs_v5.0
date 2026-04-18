@@ -6,6 +6,7 @@ parsing helpers, validations, diagnostics, and a compatibility shim
 """
 
 import re
+from collections import deque
 from pathlib import Path
 from typing import List, Optional, Dict, Any, Set
 
@@ -81,11 +82,11 @@ def find_path_blockage(world_state: Dict[str, Any], player_state: PlayerState, s
     if start_loc == target_loc:
         return None
         
-    q_conn = [start_loc]
+    q_conn = deque([start_loc])
     v_conn = {start_loc}
     found_physically = False
     while q_conn:
-        curr = q_conn.pop(0)
+        curr = q_conn.popleft()
         if curr == target_loc:
             found_physically = True
             break
@@ -93,16 +94,16 @@ def find_path_blockage(world_state: Dict[str, Any], player_state: PlayerState, s
             if neighbor not in v_conn:
                 v_conn.add(neighbor)
                 q_conn.append(neighbor)
-    
+
     if not found_physically:
         msg = f"No physical path found from '{start_loc}' to '{target_loc}' in the world graph."
         logger.debug(msg)
         return msg
 
-    queue = [(start_loc, [])]
+    queue = deque([(start_loc, [])])
     visited = {start_loc}
     while queue:
-        curr, path_edges = queue.pop(0)
+        curr, path_edges = queue.popleft()
         if curr == target_loc:
             logger.debug(f"Physical path found: {path_edges}")
             for u, v in path_edges:
@@ -300,11 +301,17 @@ def validate_problem_predicates(domain_pddl: str, problem_pddl: str) -> Optional
             if p not in domain_preds:
                 unknown.add(p)
 
-    init_match = re.search(r"\(:init(.*?)\)", problem_pddl, re.DOTALL)
+    # Use lookahead for :goal so the regex captures all init facts (greedy-safe)
+    init_match = re.search(r"\(:init(.*?)(?=\s*\(:goal)", problem_pddl, re.DOTALL)
+    if not init_match:
+        # Fallback when :goal is absent — greedy match to the closing outer paren
+        init_match = re.search(r"\(:init(.*)\)", problem_pddl, re.DOTALL)
     if init_match:
         _collect(init_match.group(1))
 
-    goal_match = re.search(r"\(:goal(.*?)\)", problem_pddl, re.DOTALL)
+    goal_match = re.search(r"\(:goal(.*)\)\s*\)", problem_pddl, re.DOTALL)
+    if not goal_match:
+        goal_match = re.search(r"\(:goal(.*?)\)", problem_pddl, re.DOTALL)
     if goal_match:
         _collect(goal_match.group(1))
 
