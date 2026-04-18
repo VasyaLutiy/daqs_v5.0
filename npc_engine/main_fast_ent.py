@@ -6,6 +6,7 @@ Keeps all planning/world logic server-side; clients call HTTP endpoints.
 import asyncio
 import functools
 import uuid
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Dict, Any, Tuple, Optional, List
 from datetime import datetime, timezone
@@ -47,7 +48,6 @@ BASE_DIR = Path(__file__).resolve().parent
 WORLD_CONFIG_PATH = BASE_DIR / "config" / "world"
 CONFIG_DIR = BASE_DIR / "config"
 
-app = FastAPI(title="NPC Engine API (Enterprise)", version=__version__)
 SESSION_STORE = SessionStore(ttl_seconds=3600.0, max_sessions=10_000)
 GAME_ENGINE = GameEngine(CONFIG_DIR)
 VIS_GEN = VisualGenerator()
@@ -59,7 +59,6 @@ DIALOGUE_GRAPHS: Dict[str, CompiledDialogueGraph] = {}
 QUEST_PLANNER: Optional[QuestPlanner] = None
 
 
-@app.on_event("startup")
 async def _startup_compile_domains() -> None:
     """Compile all persona YAMLs and initialise QuestPlanner at startup."""
     global DIALOGUE_GRAPHS, QUEST_PLANNER
@@ -79,6 +78,19 @@ async def _startup_compile_domains() -> None:
         logger.info("[startup] QuestPlanner initialised")
     except Exception as exc:
         logger.error(f"[startup] QuestPlanner init failed: {exc}", exc_info=True)
+
+
+@asynccontextmanager
+async def _lifespan(_app: FastAPI):
+    await _startup_compile_domains()
+    yield
+
+
+app = FastAPI(
+    title="NPC Engine API (Enterprise)",
+    version=__version__,
+    lifespan=_lifespan,
+)
 
 
 def _get_dialogue_engine(persona_id: str) -> DialogueEngine | None:
@@ -267,6 +279,12 @@ def _maybe_update_target_goal(social_state: Dict[str, Any]) -> None:
 # === Helpers (wrappers around shared libs) ===
 def load_world_ent() -> WorldGraph:
     return load_world(WORLD_CONFIG_PATH)
+
+
+async def _run_blocking(func, *args, **kwargs):
+    """Run a blocking call in the default threadpool."""
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(None, functools.partial(func, *args, **kwargs))
 
 
 # === Endpoints ===
@@ -583,7 +601,9 @@ async def social_init(request: SocialInitRequest):
             except Exception:
                 quest_keys = []
 
-        reply_payload = social_llm.generate_quest_intro(social_state, quest_keys, target_goal)
+        reply_payload = await _run_blocking(
+            social_llm.generate_quest_intro, social_state, quest_keys, target_goal
+        )
 
         image_path = None
         try:
@@ -596,7 +616,8 @@ async def social_init(request: SocialInitRequest):
                 image_ref_path = str(Path("npc_engine/config/social_world/nodes/personas") / image_ref)
             loc_data = orchestrator.locations_data.get(current_location, {})
             loc_name = loc_data.get("name", current_location)
-            image_path = VIS_GEN.generate_scene_visual(
+            image_path = await _run_blocking(
+                VIS_GEN.generate_scene_visual,
                 reply_payload.get("scene_description", ""),
                 persona_name,
                 persona_desc,
@@ -642,17 +663,19 @@ async def social_message(request: SocialMessageRequest):
     try:
         persona_id = request.persona_id
 
-        # Reconstruct typed SocialState from incoming dict
-        state = SocialState.from_dict({**request.social_state, "persona_id": persona_id})
-
         base_state = {
-            **state.to_dict(),
+            **SocialState.from_dict({**request.social_state, "persona_id": persona_id}).to_dict(),
             "history": request.social_state.get("history", []),
             "metadata": request.social_state.get("metadata", {}),
             "active_persona": request.social_state.get("active_persona", persona_id),
             "current_location": request.player_state.get("location", "unknown"),
         }
         session = await _get_session(persona_id, request.session_id, base_state)
+        # Session store is the source of truth once the session exists.
+        session["current_location"] = request.player_state.get(
+            "location", session.get("current_location", "unknown")
+        )
+        state = SocialState.from_dict({**session, "persona_id": persona_id})
 
         user_msg = {"role": "user", "content": request.message}
         session.setdefault("history", []).append(user_msg)
@@ -702,7 +725,12 @@ async def social_message(request: SocialMessageRequest):
             session['hint_level'] = min(int(session.get('hint_level', 0)) + 1, 3)
 
         # Narrative generation
-        payload = social_llm.generate_social_narrative(chosen_action or "talk", session, request.message)
+        payload = await _run_blocking(
+            social_llm.generate_social_narrative,
+            chosen_action or "talk",
+            session,
+            request.message,
+        )
 
         _maybe_update_target_goal(session)
 
@@ -725,7 +753,8 @@ async def social_message(request: SocialMessageRequest):
             scene_desc = payload.get("scene_description", "") if isinstance(payload, dict) else ""
             if not scene_desc:
                 scene_desc = f"{persona_name} responds in {loc_name}."
-            image_path = VIS_GEN.generate_scene_visual(
+            image_path = await _run_blocking(
+                VIS_GEN.generate_scene_visual,
                 scene_desc,
                 persona_name,
                 persona_desc,
