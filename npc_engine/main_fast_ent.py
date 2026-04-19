@@ -136,7 +136,7 @@ class HealthResponse(BaseModel):
     version: str
     up_available: bool
     personas_loaded: int = 0
-    persona_ids: List[str] = []
+    persona_ids: List[str] = Field(default_factory=list)
 
 
 class SocialInitRequest(BaseModel):
@@ -145,40 +145,47 @@ class SocialInitRequest(BaseModel):
     target_goal: Optional[str] = None
     can_quest: bool = True
     player_state: Optional[Dict[str, Any]] = None
+    session_id: Optional[str] = None
+    debug: bool = False
 
 
 class SocialInitResponse(BaseModel):
     status: str
+    session_id: str
     persona_id: str
     start_context: str
     target_goal: str
-    metadata: Dict[str, Any] = {}
-    social_state: Dict[str, Any] = {}
-    history: List[Dict[str, Any]] = []
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+    social_state: Dict[str, Any] = Field(default_factory=dict)
+    history: List[Dict[str, Any]] = Field(default_factory=list)
     reply: Optional[Any] = None
     image_path: Optional[str] = None
     request_id: Optional[str] = None
     duration_ms: Optional[float] = None
     can_quest: bool = True
+    debug: Optional[Dict[str, Any]] = None
 
 
 class SocialMessageRequest(BaseModel):
     persona_id: str
-    social_state: Dict[str, Any]
+    social_state: Dict[str, Any] = Field(default_factory=dict)
     player_state: Dict[str, Any]
     message: str
     session_id: Optional[str] = None
     action: Optional[str] = Field(None, description="Optional explicit PDDL action to execute; bypasses NLU when valid.")
+    debug: bool = False
 
 
 class SocialMessageResponse(BaseModel):
     status: str
+    session_id: str
     reply: Optional[Any] = None
-    social_state: Dict[str, Any] = {}
-    history: List[Dict[str, Any]] = []
+    social_state: Dict[str, Any] = Field(default_factory=dict)
+    history: List[Dict[str, Any]] = Field(default_factory=list)
     image_path: Optional[str] = None
-    metadata: Dict[str, Any] = {}
+    metadata: Dict[str, Any] = Field(default_factory=dict)
     error: Optional[str] = None
+    debug: Optional[Dict[str, Any]] = None
 
 
 class QuestAcceptRequest(BaseModel):
@@ -220,6 +227,22 @@ def _session_key(persona_id: str, session_id: Optional[str]) -> str:
     return f"{persona_id}:{session_id or 'default'}"
 
 
+def _normalize_session_id(session_id: Optional[str]) -> Optional[str]:
+    if session_id is None:
+        return None
+    normalized = str(session_id).strip()
+    return normalized or None
+
+
+def _resolve_session_id(
+    session_id: Optional[str],
+    social_state: Optional[Dict[str, Any]] = None,
+) -> Optional[str]:
+    return _normalize_session_id(session_id) or _normalize_session_id(
+        (social_state or {}).get("session_id")
+    )
+
+
 async def _get_session(
     persona_id: str, session_id: Optional[str], default_state: Dict[str, Any]
 ) -> Dict[str, Any]:
@@ -238,6 +261,57 @@ def _has_item(player_state: Dict[str, Any], item_id: str) -> bool:
     inv = player_state.get("inventory", {}) if isinstance(player_state, dict) else {}
     items = inv.get("items", {})
     return items.get(item_id, 0) > 0
+
+
+def _public_persona_metadata(meta: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "persona_name": meta.get("persona_name"),
+        "tags": meta.get("tags", []),
+        "has_v2_behavior": bool(meta.get("has_v2_behavior", False)),
+    }
+
+
+def _client_social_state(
+    session: Dict[str, Any],
+    session_id: str,
+    include_debug: bool = False,
+) -> Dict[str, Any]:
+    state_payload = SocialState.from_dict(session).to_dict()
+    state_payload["session_id"] = session_id
+    state_payload["current_location"] = session.get("current_location", "unknown")
+    if include_debug:
+        state_payload["active_persona"] = session.get(
+            "active_persona", state_payload.get("persona_id", "")
+        )
+        state_payload["available_moves"] = list(session.get("available_moves", []))
+        state_payload["metadata"] = session.get("metadata", {})
+    return state_payload
+
+
+def _social_debug_payload(
+    session: Dict[str, Any],
+    include_persona_metadata: bool = False,
+) -> Optional[Dict[str, Any]]:
+    debug_payload: Dict[str, Any] = {}
+    if include_persona_metadata:
+        debug_payload["persona_metadata"] = session.get("metadata", {})
+    if "available_moves" in session:
+        debug_payload["available_moves"] = list(session.get("available_moves", []))
+    return debug_payload or None
+
+
+def _compute_available_moves(
+    persona_id: str,
+    state: SocialState,
+    session: Dict[str, Any],
+    player_state: Optional[Dict[str, Any]] = None,
+) -> List[str]:
+    de = _get_dialogue_engine(persona_id)
+    if de:
+        return [m.pddl_str for m in de.get_valid_moves(state)]
+    state_for_moves = session.copy()
+    state_for_moves["player_data"] = player_state or {}
+    return GAME_ENGINE.get_valid_moves(state_for_moves)
 
 
 # Explicit action guards for UI shortcuts (bypass NLU but keep sanity checks)
@@ -503,6 +577,7 @@ async def social_init(request: SocialInitRequest):
     request_id = str(uuid.uuid4())
     start_ts = datetime.now(timezone.utc)
     try:
+        session_id = _resolve_session_id(request.session_id) or str(uuid.uuid4())
         orch = PDDLOrchestrator()
         meta = orch.get_persona_metadata(request.persona_id)
         start_ctx = request.active_context or meta.get("start_context", "ctx_intro")
@@ -531,16 +606,17 @@ async def social_init(request: SocialInitRequest):
             "current_location": current_location,
             "active_persona": request.persona_id,
             "available_moves": [],
+            "session_id": session_id,
         }
 
         # Precompute available moves (DialogueEngine when compiled, legacy fallback)
         try:
-            _de = _get_dialogue_engine(request.persona_id)
-            if _de:
-                session_extras["available_moves"] = [m.pddl_str for m in _de.get_valid_moves(state)]
-            else:
-                state_for_moves = {**state.to_dict(), **session_extras, "player_data": request.player_state or {}}
-                session_extras["available_moves"] = GAME_ENGINE.get_valid_moves(state_for_moves)
+            session_extras["available_moves"] = _compute_available_moves(
+                request.persona_id,
+                state,
+                {**state.to_dict(), **session_extras},
+                request.player_state,
+            )
         except Exception:
             pass
 
@@ -633,22 +709,33 @@ async def social_init(request: SocialInitRequest):
 
         # Persist: merge typed state back to dict for the session store
         full_session = {**state.to_dict(), **session_extras}
-        await _save_session(request.persona_id, None, full_session)
+        await _save_session(request.persona_id, session_id, full_session)
+
+        response_state = _client_social_state(
+            full_session, session_id, include_debug=request.debug
+        )
+        response_debug = (
+            _social_debug_payload(full_session, include_persona_metadata=True)
+            if request.debug
+            else None
+        )
 
         duration_ms = (datetime.now(timezone.utc) - start_ts).total_seconds() * 1000
         return SocialInitResponse(
             status="success",
+            session_id=session_id,
             persona_id=request.persona_id,
             start_context=start_ctx,
             target_goal=target_goal,
-            metadata=meta,
-            social_state=full_session,
+            metadata=_public_persona_metadata(meta),
+            social_state=response_state,
             history=history,
             reply=reply_payload,
             image_path=image_path,
             request_id=request_id,
             duration_ms=duration_ms,
             can_quest=request.can_quest,
+            debug=response_debug,
         )
     except Exception as e:
         logger.error(f"/social/init failed: {e}", exc_info=True)
@@ -662,6 +749,7 @@ async def social_message(request: SocialMessageRequest):
     start_ts = datetime.now(timezone.utc)
     try:
         persona_id = request.persona_id
+        session_id = _resolve_session_id(request.session_id, request.social_state)
 
         base_state = {
             **SocialState.from_dict({**request.social_state, "persona_id": persona_id}).to_dict(),
@@ -669,8 +757,10 @@ async def social_message(request: SocialMessageRequest):
             "metadata": request.social_state.get("metadata", {}),
             "active_persona": request.social_state.get("active_persona", persona_id),
             "current_location": request.player_state.get("location", "unknown"),
+            "session_id": session_id,
         }
-        session = await _get_session(persona_id, request.session_id, base_state)
+        session = await _get_session(persona_id, session_id, base_state)
+        session["session_id"] = session_id
         # Session store is the source of truth once the session exists.
         session["current_location"] = request.player_state.get(
             "location", session.get("current_location", "unknown")
@@ -734,6 +824,17 @@ async def social_message(request: SocialMessageRequest):
 
         _maybe_update_target_goal(session)
 
+        current_state = SocialState.from_dict({**session, "persona_id": persona_id})
+        try:
+            session["available_moves"] = _compute_available_moves(
+                persona_id,
+                current_state,
+                session,
+                request.player_state,
+            )
+        except Exception:
+            session.setdefault("available_moves", [])
+
         image_path = None
         try:
             persona_data = orchestrator.personas_data.get(persona_id, {})
@@ -766,22 +867,30 @@ async def social_message(request: SocialMessageRequest):
             image_path = None
 
         session.setdefault("history", []).append({"role": "assistant", "content": payload, "image": image_path})
-        await _save_session(persona_id, request.session_id, session)
+        await _save_session(persona_id, session_id, session)
+
+        response_state = _client_social_state(
+            session,
+            session_id or "default",
+            include_debug=request.debug,
+        )
+        response_debug = _social_debug_payload(session) if request.debug else None
 
         duration_ms = (datetime.now(timezone.utc) - start_ts).total_seconds() * 1000
         return SocialMessageResponse(
             status="success",
+            session_id=session_id or "default",
             reply=payload,
-            social_state=session,
+            social_state=response_state,
             history=session.get("history", []),
             image_path=image_path,
             metadata={
                 "request_id": request_id,
                 "duration_ms": duration_ms,
                 "action": chosen_action,
-                "valid_moves": valid_moves,
             },
             error=None,
+            debug=response_debug,
         )
     except Exception as e:
         logger.error(f"/social/message failed: {e}", exc_info=True)

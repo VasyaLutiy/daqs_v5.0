@@ -87,12 +87,40 @@ def api_quest_difficulty(goal: Optional[str]) -> Optional[str]:
     return res.get("concept")
 
 
-def api_social_init(persona_id: str, player_state: Dict[str, Any], can_quest: bool = True) -> Dict[str, Any]:
-    return _post(API_SOCIAL_INIT, {"persona_id": persona_id, "player_state": player_state, "can_quest": can_quest})
+def api_social_init(
+    persona_id: str,
+    player_state: Dict[str, Any],
+    can_quest: bool = True,
+    session_id: Optional[str] = None,
+) -> Dict[str, Any]:
+    payload: Dict[str, Any] = {
+        "persona_id": persona_id,
+        "player_state": player_state,
+        "can_quest": can_quest,
+        "debug": True,
+    }
+    if session_id:
+        payload["session_id"] = session_id
+    return _post(API_SOCIAL_INIT, payload)
 
 
-def api_social_message(persona_id: str, social_state: Dict[str, Any], player_state: Dict[str, Any], message: str, action: Optional[str] = None) -> Dict[str, Any]:
-    payload = {"persona_id": persona_id, "social_state": social_state, "player_state": player_state, "message": message}
+def api_social_message(
+    persona_id: str,
+    social_state: Dict[str, Any],
+    player_state: Dict[str, Any],
+    message: str,
+    action: Optional[str] = None,
+    session_id: Optional[str] = None,
+) -> Dict[str, Any]:
+    payload = {
+        "persona_id": persona_id,
+        "social_state": social_state,
+        "player_state": player_state,
+        "message": message,
+        "debug": True,
+    }
+    if session_id:
+        payload["session_id"] = session_id
     if action:
         payload["action"] = action
     return _post(API_SOCIAL_MSG, payload)
@@ -171,6 +199,8 @@ if "social_state" not in st.session_state:
     st.session_state.social_state = {}
 if "social_messages" not in st.session_state:
     st.session_state.social_messages = []
+if "social_session_id" not in st.session_state:
+    st.session_state.social_session_id = None
 if "game_mode" not in st.session_state:
     st.session_state.game_mode = "WORLD"  # WORLD | SOCIAL
 if "visual_enabled" not in st.session_state:
@@ -303,11 +333,18 @@ def _start_social(npc: Dict[str, Any]):
     persona_id = npc.get("social_persona") or "persona_cyber"
     can_quest = npc.get("dialogue_quest", False)
     try:
-        res = api_social_init(persona_id, st.session_state.player_data, can_quest=can_quest)
+        res = api_social_init(
+            persona_id,
+            st.session_state.player_data,
+            can_quest=can_quest,
+            session_id=st.session_state.get("social_session_id"),
+        )
         st.session_state.social_state = res.get("social_state", {})
         st.session_state.social_messages = res.get("history", [])
+        st.session_state.social_session_id = res.get("session_id")
         st.session_state.social_state["active_persona"] = persona_id
-        st.session_state.social_state["available_moves"] = []
+        st.session_state.social_state["session_id"] = st.session_state.social_session_id
+        st.session_state.social_state["available_moves"] = res.get("debug", {}).get("available_moves", [])
         graph = api_social_graph(persona_id, st.session_state.social_state, st.session_state.social_state.get("target_goal"))
         st.session_state.social_state["graph"] = graph
         st.session_state.social_state["can_quest"] = can_quest
@@ -383,6 +420,7 @@ def render_right_column():
             st.subheader("💬 Interaction Active")
             if st.button("🚪 Leave Conversation"):
                 st.session_state.game_mode = "WORLD"
+                st.session_state.social_session_id = None
                 if "goal" in st.session_state.player_data:
                     del st.session_state.player_data["goal"]
                 save_player_state(st.session_state.player_data)
@@ -482,11 +520,21 @@ def _world_chat_input(prompt: str):
 def _social_chat_input(prompt: str, action: Optional[str] = None):
     persona_id = st.session_state.social_state.get("active_persona", st.session_state.social_state.get("persona_id", "persona_cyber"))
     try:
-        res = api_social_message(persona_id, st.session_state.social_state, st.session_state.player_data, prompt, action)
+        res = api_social_message(
+            persona_id,
+            st.session_state.social_state,
+            st.session_state.player_data,
+            prompt,
+            action,
+            session_id=st.session_state.get("social_session_id"),
+        )
         st.session_state.social_state = res.get("social_state", st.session_state.social_state)
+        st.session_state.social_session_id = res.get("session_id", st.session_state.get("social_session_id"))
+        st.session_state.social_state["session_id"] = st.session_state.social_session_id
         meta = res.get("metadata", {})
-        if meta:
-            st.session_state.social_state["available_moves"] = meta.get("valid_moves", [])
+        debug = res.get("debug", {})
+        if meta or debug:
+            st.session_state.social_state["available_moves"] = debug.get("available_moves", [])
         graph = api_social_graph(persona_id, st.session_state.social_state, st.session_state.social_state.get("target_goal"))
         st.session_state.social_state["graph"] = graph
         st.session_state.social_messages.append({"role": "user", "content": prompt})

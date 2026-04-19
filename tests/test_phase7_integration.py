@@ -177,17 +177,59 @@ def test_7_2_social_init_creates_session():
 
         assert resp.status == "success"
         assert resp.persona_id == "persona_cyber"
+        assert resp.session_id
         assert len(fresh_store) == 1, "social_init must persist exactly one session"
+        assert resp.debug is None, "default social_init payload should be clean"
+        assert "metadata" not in resp.social_state
+        assert "available_moves" not in resp.social_state
 
-        key = app_module._session_key("persona_cyber", None)
+        key = app_module._session_key("persona_cyber", resp.session_id)
         stored = run(fresh_store.get(key))
         assert stored is not None, "session must be retrievable by key"
         assert stored.get("persona_id") == "persona_cyber"
+        assert stored.get("session_id") == resp.session_id
 
     finally:
         app_module.DIALOGUE_GRAPHS = original_graphs
         app_module.SESSION_STORE = original_store
         app_module.QUEST_PLANNER = original_planner
+
+
+def test_7_2b_social_init_debug_payload_opt_in():
+    import npc_engine.main_fast_ent as app_module
+    from npc_engine.main_fast_ent import SocialInitRequest
+
+    original_graphs = app_module.DIALOGUE_GRAPHS
+    original_store = app_module.SESSION_STORE
+
+    fresh_store = SessionStore(ttl_seconds=60)
+    app_module.DIALOGUE_GRAPHS = _GRAPHS
+    app_module.SESSION_STORE = fresh_store
+
+    try:
+        with (
+            patch.object(app_module, "social_llm", _mock_llm()),
+            patch.object(app_module, "orchestrator", _mock_orchestrator()),
+            patch.object(app_module.VIS_GEN, "generate_scene_visual", return_value=None),
+        ):
+            resp = run(app_module.social_init(
+                SocialInitRequest(
+                    persona_id="persona_cyber",
+                    player_state=_minimal_player_state(),
+                    debug=True,
+                )
+            ))
+
+        assert resp.status == "success"
+        assert resp.debug is not None
+        assert "persona_metadata" in resp.debug
+        assert "available_moves" in resp.debug
+        assert "metadata" in resp.social_state
+        assert "available_moves" in resp.social_state
+
+    finally:
+        app_module.DIALOGUE_GRAPHS = original_graphs
+        app_module.SESSION_STORE = original_store
 
 
 # ---------------------------------------------------------------------------
@@ -346,24 +388,29 @@ def test_7_5_full_chain_init_then_message():
                 )
             ))
             assert init_resp.status == "success"
+            assert init_resp.session_id
 
             # Step 2: message
             msg_resp = run(app_module.social_message(
                 SocialMessageRequest(
                     persona_id="persona_cyber",
-                    session_id=None,
+                    session_id=init_resp.session_id,
                     social_state=init_resp.social_state,
                     player_state=_minimal_player_state(),
                     message="Tell me more.",
                 )
             ))
             assert msg_resp.status == "success"
+            assert msg_resp.session_id == init_resp.session_id
+            assert msg_resp.debug is None
+            assert "metadata" not in msg_resp.social_state
+            assert "available_moves" not in msg_resp.social_state
 
         # After the chain there must be exactly 1 session key
         assert len(fresh_store) == 1
 
         # The session must have at least 2 history entries (init assistant + message assistant)
-        key = app_module._session_key("persona_cyber", None)
+        key = app_module._session_key("persona_cyber", init_resp.session_id)
         session = run(fresh_store.get(key))
         assert session is not None
         history = session.get("history", [])
