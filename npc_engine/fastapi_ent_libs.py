@@ -13,7 +13,7 @@ from datetime import datetime
 
 from npc_engine.engine.logging_config import logging_manager
 from npc_engine.engine.world.graph import WorldGraph, NodeType, LocationNode
-from npc_engine.engine.world.player_state import PlayerState
+from npc_engine.engine.world.player_state import PlayerState, GraphDiff
 from npc_engine.engine.world.regenerator import WorldRegenerator
 from npc_engine.engine.world.loader import load_world_from_flat_yaml
 from npc_engine.engine.master.pddl_orchestrator import PDDLOrchestrator
@@ -38,6 +38,7 @@ def load_player_from_json_data(data: Dict[str, Any]) -> Tuple[PlayerState, Optio
     player = PlayerState(
         player_id=data.get("id", DEFAULT_PLAYER_ID),
         current_location=data.get("location", DEFAULT_LOCATION),
+        session_id=data.get("session_id"),
     )
 
     for ab_id, level in data.get("abilities", {}).items():
@@ -55,17 +56,60 @@ def load_player_from_json_data(data: Dict[str, Any]) -> Tuple[PlayerState, Optio
     player.discovered_locations = set(knowledge.get("discovered_locations", []))
     player.visited_locations = set(knowledge.get("visited_locations", []))
     player.known_npcs = set(knowledge.get("known_npcs", []))
+    player.known_facts = set(knowledge.get("known_facts", data.get("known_facts", [])))
 
     history = data.get("history", {})
     player.defeated_enemies = set(history.get("defeated_enemies", []))
     player.avoided_enemies = set(history.get("avoided_enemies", []))
     player.talked_to = set(history.get("talked_to", []))
 
+    graph_diff = data.get("graph_diff")
+    if isinstance(graph_diff, dict):
+        player.graph_diff = GraphDiff.from_dict(graph_diff)
+
+    respawn_timers = data.get("respawn_timers", {})
+    if isinstance(respawn_timers, dict):
+        player.respawn_timers = {
+            str(npc_id): float(ts)
+            for npc_id, ts in respawn_timers.items()
+        }
+
     quest_state = data.get("quest_state", {})
     player.completed_quests = set(quest_state.get("completed_quests", []))
 
     goal = data.get("goal")
     return player, goal
+
+
+def serialize_player_state(player: PlayerState, goal: Optional[str] = None) -> Dict[str, Any]:
+    """Serialize PlayerState to the JSON-like shape used by HTTP clients."""
+    return {
+        "id": player.player_id,
+        "session_id": player.session_id,
+        "location": player.current_location,
+        "inventory": {"items": dict(player.inventory.items)},
+        "abilities": {
+            ability_id: ability.level
+            for ability_id, ability in player.abilities.items()
+        },
+        "knowledge": {
+            "discovered_locations": sorted(player.discovered_locations),
+            "visited_locations": sorted(player.visited_locations),
+            "known_npcs": sorted(player.known_npcs),
+            "known_facts": sorted(player.known_facts),
+        },
+        "history": {
+            "defeated_enemies": sorted(player.defeated_enemies),
+            "avoided_enemies": sorted(player.avoided_enemies),
+            "talked_to": sorted(player.talked_to),
+        },
+        "quest_state": {
+            "completed_quests": sorted(player.completed_quests),
+        },
+        "graph_diff": player.graph_diff.to_dict(),
+        "respawn_timers": dict(player.respawn_timers),
+        "goal": goal,
+    }
 
 
 def collect_location_data(world: WorldGraph, location_id: str, goal: Optional[str] = None) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]]]:
@@ -180,6 +224,37 @@ def collect_available_quests(world: WorldGraph, player: PlayerState) -> List[Dic
     return available_quests
 
 
+def build_world_snapshot(
+    world: WorldGraph,
+    player: PlayerState,
+    goal: Optional[str] = None,
+    oracle_mode: bool = False,
+) -> Dict[str, Any]:
+    """Build a session-safe world snapshot for a player."""
+    target_world = world
+    if not oracle_mode:
+        regenerator = WorldRegenerator()
+        target_world = regenerator.regenerate(world, player)
+
+    npcs_nearby, exits, items_nearby = collect_location_data(
+        target_world, player.current_location, goal
+    )
+    available_quests = collect_available_quests(target_world, player)
+    location_node = target_world.get_node(player.current_location)
+
+    return {
+        "location": {
+            "id": player.current_location,
+            "name": getattr(location_node, "name", player.current_location),
+            "description": getattr(location_node, "description", ""),
+        },
+        "npcs_nearby": npcs_nearby,
+        "exits": exits,
+        "items_nearby": items_nearby,
+        "available_quests": available_quests,
+    }
+
+
 def process_request(input_data: Dict[str, Any], config_path: Path, oracle_mode: bool = False) -> Dict[str, Any]:
     """Process the input JSON data and return result dict (enterprise copy)."""
     logger = logging_manager.get_component_logger("master")
@@ -229,4 +304,3 @@ def process_request(input_data: Dict[str, Any], config_path: Path, oracle_mode: 
             "error": str(e),
             "oracle_used": oracle_mode,
         }
-

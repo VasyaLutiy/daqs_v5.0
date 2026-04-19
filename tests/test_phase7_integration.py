@@ -15,6 +15,7 @@ these tests are purely in-process and require no network or docker.
 from __future__ import annotations
 
 import asyncio
+import json
 import sys
 import time
 import types
@@ -81,6 +82,58 @@ def run(coro):
     return asyncio.run(coro)
 
 
+async def _asgi_json_request(app, method: str, path: str, payload: dict | None = None):
+    request_body = b""
+    headers = [(b"host", b"testserver")]
+    if payload is not None:
+        request_body = json.dumps(payload).encode("utf-8")
+        headers.extend(
+            [
+                (b"content-type", b"application/json"),
+                (b"content-length", str(len(request_body)).encode("ascii")),
+            ]
+        )
+
+    scope = {
+        "type": "http",
+        "asgi": {"version": "3.0"},
+        "http_version": "1.1",
+        "method": method.upper(),
+        "scheme": "http",
+        "path": path,
+        "raw_path": path.encode("ascii"),
+        "query_string": b"",
+        "root_path": "",
+        "headers": headers,
+        "client": ("127.0.0.1", 12345),
+        "server": ("testserver", 80),
+    }
+    receive_messages = [{"type": "http.request", "body": request_body, "more_body": False}]
+    response_status = None
+    response_body_chunks = []
+
+    async def receive():
+        if receive_messages:
+            return receive_messages.pop(0)
+        return {"type": "http.disconnect"}
+
+    async def send(message):
+        nonlocal response_status
+        if message["type"] == "http.response.start":
+            response_status = message["status"]
+        elif message["type"] == "http.response.body":
+            response_body_chunks.append(message.get("body", b""))
+
+    await app(scope, receive, send)
+    raw_body = b"".join(response_body_chunks)
+    parsed = json.loads(raw_body.decode("utf-8")) if raw_body else None
+    return response_status, parsed
+
+
+def asgi_json_request(app, method: str, path: str, payload: dict | None = None):
+    return run(_asgi_json_request(app, method, path, payload))
+
+
 def _minimal_player_state() -> dict:
     return {
         "id": "player_001",
@@ -130,6 +183,16 @@ def test_7_1b_app_routes_registered():
 
     expected = {
         "/health",
+        "/game/sessions",
+        "/game/sessions/{game_session_id}",
+        "/game/sessions/{game_session_id}/world",
+        "/game/sessions/{game_session_id}/world/move",
+        "/game/sessions/{game_session_id}/world/pickup",
+        "/game/sessions/{game_session_id}/quests/preview",
+        "/game/sessions/{game_session_id}/quests/accept",
+        "/game/sessions/{game_session_id}/social/init",
+        "/game/sessions/{game_session_id}/social/message",
+        "/game/sessions/{game_session_id}/social/exit",
         "/social/init",
         "/social/message",
         "/social/graph",
@@ -441,3 +504,235 @@ def test_7_6_module_level_globals_types():
     assert app_module.QUEST_PLANNER is None or isinstance(
         app_module.QUEST_PLANNER, QuestPlanner
     ), "QUEST_PLANNER must be None or QuestPlanner"
+
+
+def test_7_7_game_session_create_and_restore():
+    import npc_engine.main_fast_ent as app_module
+
+    original_store = app_module.GAME_SESSION_STORE
+    fresh_store = SessionStore(ttl_seconds=60)
+    app_module.GAME_SESSION_STORE = fresh_store
+
+    try:
+        created = run(app_module.create_game_session())
+        assert created.status == "success"
+        assert created.game_session_id
+        assert created.player_snapshot["location"] == "forest_entrance"
+        assert created.world_snapshot["location"]["id"] == "forest_entrance"
+
+        restored = run(app_module.get_game_session(created.game_session_id))
+        assert restored.status == "success"
+        assert restored.game_session_id == created.game_session_id
+        assert restored.player_snapshot["id"] == created.player_snapshot["id"]
+    finally:
+        app_module.GAME_SESSION_STORE = original_store
+
+
+def test_7_8_game_session_move_and_pickup():
+    import npc_engine.main_fast_ent as app_module
+    from npc_engine.main_fast_ent import WorldMoveRequest, WorldPickupRequest
+
+    original_store = app_module.GAME_SESSION_STORE
+    fresh_store = SessionStore(ttl_seconds=60)
+    app_module.GAME_SESSION_STORE = fresh_store
+
+    try:
+        created = run(app_module.create_game_session())
+        moved = run(app_module.move_game_world(
+            created.game_session_id,
+            WorldMoveRequest(target_location_id="forest_clearing"),
+        ))
+        assert moved.player_snapshot["location"] == "forest_clearing"
+        assert moved.world_snapshot["location"]["id"] == "forest_clearing"
+
+        picked = run(app_module.pickup_game_item(
+            created.game_session_id,
+            WorldPickupRequest(item_id="forest_herbs"),
+        ))
+        assert picked.player_snapshot["inventory"]["items"]["forest_herbs"] == 1
+        item_ids = {item["id"] for item in picked.world_snapshot["items_nearby"]}
+        assert "forest_herbs" not in item_ids
+    finally:
+        app_module.GAME_SESSION_STORE = original_store
+
+
+def test_7_9_game_session_social_flow():
+    import npc_engine.main_fast_ent as app_module
+    from npc_engine.main_fast_ent import GameSocialInitRequest, GameSocialMessageRequest, GameSocialExitRequest
+
+    original_graphs = app_module.DIALOGUE_GRAPHS
+    original_social_store = app_module.SESSION_STORE
+    original_game_store = app_module.GAME_SESSION_STORE
+
+    app_module.DIALOGUE_GRAPHS = _GRAPHS
+    app_module.SESSION_STORE = SessionStore(ttl_seconds=60)
+    app_module.GAME_SESSION_STORE = SessionStore(ttl_seconds=60)
+
+    try:
+        with (
+            patch.object(app_module, "social_llm", _mock_llm()),
+            patch.object(app_module, "orchestrator", _mock_orchestrator()),
+            patch.object(app_module.VIS_GEN, "generate_scene_visual", return_value=None),
+        ):
+            created = run(app_module.create_game_session())
+            social_init = run(app_module.init_game_social(
+                created.game_session_id,
+                GameSocialInitRequest(persona_id="persona_cyber", can_quest=True),
+            ))
+            active_social = social_init.active_social_session
+            assert active_social is not None
+            assert social_init.ui_context["mode"] == "social"
+
+            social_msg = run(app_module.message_game_social(
+                created.game_session_id,
+                GameSocialMessageRequest(
+                    social_session_id=active_social["social_session_id"],
+                    message="Hello there.",
+                ),
+            ))
+            assert social_msg.active_social_session is not None
+            assert len(social_msg.active_social_session["history"]) >= 2
+
+            exited = run(app_module.exit_game_social(
+                created.game_session_id,
+                GameSocialExitRequest(
+                    social_session_id=active_social["social_session_id"],
+                ),
+            ))
+            assert exited.active_social_session is None
+            assert exited.ui_context["mode"] == "world"
+    finally:
+        app_module.DIALOGUE_GRAPHS = original_graphs
+        app_module.SESSION_STORE = original_social_store
+        app_module.GAME_SESSION_STORE = original_game_store
+
+
+def test_7_10_quest_journal_persists_in_session_snapshot():
+    import npc_engine.main_fast_ent as app_module
+    from npc_engine.main_fast_ent import GameQuestRequest, WorldMoveRequest
+
+    original_game_store = app_module.GAME_SESSION_STORE
+    app_module.GAME_SESSION_STORE = SessionStore(ttl_seconds=60)
+
+    try:
+        created = run(app_module.create_game_session())
+        restored = run(app_module.get_game_session(created.game_session_id))
+        quest = restored.world_snapshot["available_quests"][0]
+        mock_preview = app_module.QuestAcceptResponse(
+            status="success",
+            plan=["(move forest_entrance forest_clearing)", "(pickup forest_herbs)"],
+            quest=[{"step": 1, "desc": "Reach the clearing"}, {"step": 2, "desc": "Collect herbs"}],
+            payload={"mission": "Collect herbs from the clearing."},
+        )
+
+        with patch.object(app_module, "quest_accept", AsyncMock(return_value=mock_preview)):
+            preview = run(app_module.preview_game_quest(
+                created.game_session_id,
+                GameQuestRequest(
+                    quest_goal=quest["goal"],
+                    quest_name=quest["name"],
+                    oracle_mode=True,
+                ),
+            ))
+            assert preview.quest_journal["entries"], "Quest preview should create a journal entry"
+            assert preview.quest_journal["entries"][0]["status"] == "previewed"
+
+            accepted = run(app_module.accept_game_quest(
+                created.game_session_id,
+                GameQuestRequest(
+                    quest_goal=quest["goal"],
+                    quest_name=quest["name"],
+                    oracle_mode=True,
+                ),
+            ))
+            assert accepted.active_quest is not None
+            assert accepted.quest_journal["entries"][0]["status"] == "active"
+
+            moved = run(app_module.move_game_world(
+                created.game_session_id,
+                WorldMoveRequest(target_location_id="forest_clearing"),
+            ))
+
+        persisted = run(app_module.get_game_session(created.game_session_id))
+        history_types = {event["type"] for event in persisted.quest_journal["history"]}
+        assert {"previewed", "accepted", "travel"} <= history_types
+        assert persisted.quest_journal["entries"][0]["status"] == "active"
+        assert persisted.quest_journal["entries"][0]["plan"] == mock_preview.plan
+        assert moved.quest_journal == persisted.quest_journal
+    finally:
+        app_module.GAME_SESSION_STORE = original_game_store
+
+
+def test_7_11_http_smoke_multi_session_isolation():
+    import npc_engine.main_fast_ent as app_module
+
+    original_graphs = app_module.DIALOGUE_GRAPHS
+    original_social_store = app_module.SESSION_STORE
+    original_game_store = app_module.GAME_SESSION_STORE
+
+    app_module.DIALOGUE_GRAPHS = _GRAPHS
+    app_module.SESSION_STORE = SessionStore(ttl_seconds=60)
+    app_module.GAME_SESSION_STORE = SessionStore(ttl_seconds=60)
+
+    try:
+        with (
+            patch.object(app_module, "social_llm", _mock_llm()),
+            patch.object(app_module, "orchestrator", _mock_orchestrator()),
+            patch.object(app_module.VIS_GEN, "generate_scene_visual", return_value=None),
+        ):
+            first_status, first = asgi_json_request(app_module.app, "POST", "/game/sessions")
+            second_status, second = asgi_json_request(app_module.app, "POST", "/game/sessions")
+            assert first_status == 200
+            assert second_status == 200
+
+            first_id = first["game_session_id"]
+            second_id = second["game_session_id"]
+
+            move_status, _ = asgi_json_request(
+                app_module.app,
+                "POST",
+                f"/game/sessions/{first_id}/world/move",
+                {"target_location_id": "forest_clearing"},
+            )
+            assert move_status == 200
+
+            pickup_status, _ = asgi_json_request(
+                app_module.app,
+                "POST",
+                f"/game/sessions/{first_id}/world/pickup",
+                {"item_id": "forest_herbs"},
+            )
+            assert pickup_status == 200
+
+            social_init_status, social_payload = asgi_json_request(
+                app_module.app,
+                "POST",
+                f"/game/sessions/{first_id}/social/init",
+                {"persona_id": "persona_cyber", "can_quest": True},
+            )
+            assert social_init_status == 200
+            social_session_id = social_payload["active_social_session"]["social_session_id"]
+
+            social_message_status, _ = asgi_json_request(
+                app_module.app,
+                "POST",
+                f"/game/sessions/{first_id}/social/message",
+                {"social_session_id": social_session_id, "message": "Hello"},
+            )
+            assert social_message_status == 200
+
+            isolated_status, isolated_payload = asgi_json_request(
+                app_module.app,
+                "GET",
+                f"/game/sessions/{second_id}",
+            )
+            assert isolated_status == 200
+            assert isolated_payload["player_snapshot"]["location"] == "forest_entrance"
+            assert isolated_payload["active_social_session"] is None
+            assert isolated_payload["player_snapshot"]["inventory"]["items"] == {}
+            assert isolated_payload["quest_journal"]["entries"] == []
+            assert isolated_payload["quest_journal"]["history"] == []
+    finally:
+        app_module.DIALOGUE_GRAPHS = original_graphs
+        app_module.SESSION_STORE = original_social_store
+        app_module.GAME_SESSION_STORE = original_game_store

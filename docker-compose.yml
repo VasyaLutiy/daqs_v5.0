@@ -28,6 +28,24 @@ services:
       retries: 3
       start_period: 30s
 
+  daqs_web:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        NEXT_PUBLIC_API_BASE: ${NEXT_PUBLIC_API_BASE:-http://localhost:8001}
+    image: daqs-react-frontend:latest
+    container_name: daqs_web
+    restart: unless-stopped
+    depends_on:
+      daqs:
+        condition: service_healthy
+    ports:
+      - "3000:3000"   # Next.js React frontend
+    environment:
+      - NEXT_PUBLIC_API_BASE=${NEXT_PUBLIC_API_BASE:-http://localhost:8001}
+      - NODE_ENV=production
+
 volumes:
   daqs_static:
   daqs_logs:

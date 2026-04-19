@@ -27,6 +27,8 @@ htmlcov/
 
 # Tooling caches
 .cache/
+node_modules/
+frontend/.next/
 
 # Editors and OS files
 .DS_Store

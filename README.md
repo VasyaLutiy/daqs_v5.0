@@ -127,6 +127,8 @@ Or use helper script:
 ./scripts/deploy_manual_prod.sh
 ```
 
+Detailed remote VPS instructions for the new React frontend + backend are in [DEPLOY_VPS.md](DEPLOY_VPS.md).
+
 Checks:
 
 ```bash

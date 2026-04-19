@@ -1,0 +1,99 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #090b10;
+  --bg-deep: #06070b;
+  --panel: rgba(15, 18, 27, 0.84);
+  --panel-strong: rgba(23, 27, 39, 0.93);
+  --panel-soft: rgba(110, 86, 41, 0.12);
+  --line: rgba(110, 208, 220, 0.2);
+  --line-strong: rgba(235, 185, 97, 0.35);
+  --ink: #edf2ff;
+  --ink-soft: #a9b6d3;
+  --accent: #ebb961;
+  --accent-cool: #6ed0dc;
+  --accent-hot: #ff8f66;
+  --danger: #ff7b7b;
+  --shadow: 0 30px 80px rgba(0, 0, 0, 0.45);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background:
+    radial-gradient(circle at top, rgba(110, 208, 220, 0.1), transparent 30%),
+    radial-gradient(circle at 20% 20%, rgba(235, 185, 97, 0.14), transparent 18%),
+    linear-gradient(180deg, rgba(5, 8, 13, 0.98), rgba(9, 11, 16, 1));
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(transparent 0, rgba(255, 255, 255, 0.03) 50%, transparent 100%),
+    radial-gradient(circle at center, transparent 0 45%, rgba(0, 0, 0, 0.35) 100%);
+  mix-blend-mode: screen;
+  opacity: 0.45;
+}
+
+.panel-shell {
+  background: linear-gradient(180deg, var(--panel-strong), var(--panel));
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(18px);
+}
+
+.panel-etched {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent),
+    linear-gradient(180deg, rgba(44, 49, 67, 0.9), rgba(13, 16, 22, 0.95));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.btn-primary {
+  border: 1px solid rgba(235, 185, 97, 0.48);
+  background: linear-gradient(135deg, rgba(235, 185, 97, 0.18), rgba(255, 143, 102, 0.22));
+  color: var(--ink);
+}
+
+.btn-ghost {
+  border: 1px solid rgba(110, 208, 220, 0.2);
+  background: rgba(110, 208, 220, 0.06);
+  color: var(--ink);
+}
+
+.btn-primary,
+.btn-ghost {
+  transition:
+    transform 160ms ease,
+    border-color 160ms ease,
+    background 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.btn-primary:hover,
+.btn-ghost:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
+}
+
+.text-ui-muted {
+  color: var(--ink-soft);
+}
+
+.section-kicker {
+  font-family: var(--font-mono);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--accent-cool);
+  font-size: 0.72rem;
+}
