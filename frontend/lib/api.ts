@@ -28,7 +28,7 @@ async function fetchWithTimeout(input: string, init: RequestInit): Promise<Respo
   }
 }
 
-async function parseJson<T>(response: Response): Promise<T> {
+async function parseJson<T>(response: Response, requestLabel?: string): Promise<T> {
   if (!response.ok) {
     let message = response.statusText;
     try {
@@ -37,7 +37,8 @@ async function parseJson<T>(response: Response): Promise<T> {
     } catch {
       // ignore secondary parse errors
     }
-    throw new Error(message);
+    const prefix = requestLabel ? `${requestLabel}: ` : "";
+    throw new Error(`${prefix}${response.status} ${message}`);
   }
   return (await response.json()) as T;
 }
@@ -47,7 +48,7 @@ async function apiGet<T>(path: string): Promise<T> {
     method: "GET",
     cache: "no-store",
   });
-  return parseJson<T>(response);
+  return parseJson<T>(response, `GET ${path}`);
 }
 
 async function apiPost<T>(path: string, payload?: unknown): Promise<T> {
@@ -59,7 +60,7 @@ async function apiPost<T>(path: string, payload?: unknown): Promise<T> {
     },
     body: payload === undefined ? undefined : JSON.stringify(payload),
   });
-  return parseJson<T>(response);
+  return parseJson<T>(response, `POST ${path}`);
 }
 
 export function assetUrl(path?: string | null): string | null {

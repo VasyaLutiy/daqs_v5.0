@@ -70,6 +70,23 @@ function formatTimestamp(value?: string | null) {
   return date.toLocaleString();
 }
 
+function resolveSocialImage(activeSocial?: ActiveSocialSession | null): string | null {
+  if (!activeSocial) {
+    return null;
+  }
+  if (typeof activeSocial.image_path === "string" && activeSocial.image_path) {
+    return activeSocial.image_path;
+  }
+  for (let i = activeSocial.history.length - 1; i >= 0; i -= 1) {
+    const entry = activeSocial.history[i];
+    const image = entry?.image;
+    if (typeof image === "string" && image) {
+      return image;
+    }
+  }
+  return null;
+}
+
 export function GameShell({ gameSessionId }: { gameSessionId: string }) {
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -77,6 +94,8 @@ export function GameShell({ gameSessionId }: { gameSessionId: string }) {
   const routeDoneTimerRef = useRef<number | null>(null);
   const [message, setMessage] = useState("");
   const [recentlyCompletedStep, setRecentlyCompletedStep] = useState<string | null>(null);
+  const [pendingSocialNpc, setPendingSocialNpc] = useState<string | null>(null);
+  const [dialogError, setDialogError] = useState<string | null>(null);
   const journalOpen = useGameUiStore((state) => state.journalOpen);
   const previewOpen = useGameUiStore((state) => state.previewOpen);
   const questPreview = useGameUiStore((state) => state.questPreview);
@@ -87,6 +106,12 @@ export function GameShell({ gameSessionId }: { gameSessionId: string }) {
   const sessionQuery = useQuery({
     queryKey: queryKey(gameSessionId),
     queryFn: () => getGameSession(gameSessionId),
+    refetchInterval: (query) => {
+      const payload = query.state.data as GameSessionSnapshotResponse | undefined;
+      const active = payload?.active_social_session ?? null;
+      const hasSocialImage = Boolean(resolveSocialImage(active));
+      return active && !hasSocialImage ? 2000 : false;
+    },
   });
 
   const syncSnapshot = (snapshot: GameSessionSnapshotResponse) => {
@@ -107,6 +132,11 @@ export function GameShell({ gameSessionId }: { gameSessionId: string }) {
       routeDoneTimerRef.current = window.setTimeout(() => {
         setRecentlyCompletedStep((current) => (current === completed ? null : current));
       }, 1800);
+    }
+
+    if (snapshot.ui_context.mode === "social" && snapshot.active_social_session) {
+      setPendingSocialNpc(null);
+      setDialogError(null);
     }
 
     queryClient.setQueryData(queryKey(gameSessionId), snapshot);
@@ -137,7 +167,18 @@ export function GameShell({ gameSessionId }: { gameSessionId: string }) {
   const talkMutation = useMutation({
     mutationFn: (npc: WorldNpc) =>
       initSocial(gameSessionId, npc.social_persona ?? "persona_cyber", !!npc.dialogue_quest),
+    onMutate: (npc: WorldNpc) => {
+      setDialogError(null);
+      setPendingSocialNpc(npc.name || npc.id);
+    },
     onSuccess: syncSnapshot,
+    onError: (error: Error) => {
+      setDialogError(error.message || "Failed to open dialogue session.");
+    },
+    onSettled: async () => {
+      setPendingSocialNpc(null);
+      await queryClient.invalidateQueries({ queryKey: queryKey(gameSessionId) });
+    },
   });
 
   const socialMutation = useMutation({
@@ -200,6 +241,7 @@ export function GameShell({ gameSessionId }: { gameSessionId: string }) {
 
   const session = sessionQuery.data;
   const activeSocial = session?.active_social_session ?? null;
+  const socialImage = assetUrl(resolveSocialImage(activeSocial));
   const activeRoute = session?.active_quest?.plan ?? [];
   const currentLocationId = session?.world_snapshot.location.id ?? null;
   const imageQuery = useQuery({
@@ -433,6 +475,25 @@ export function GameShell({ gameSessionId }: { gameSessionId: string }) {
             >
               {!activeSocial ? (
                 <div className="space-y-6">
+                  {pendingSocialNpc ? (
+                    <motion.div
+                      animate={{ opacity: 1, y: 0 }}
+                      className="rounded-[16px] border border-[var(--line)] bg-[rgba(110,208,220,0.12)] px-4 py-3 text-sm text-white"
+                      initial={{ opacity: 0, y: -6 }}
+                    >
+                      Opening dialogue with {pendingSocialNpc}...
+                    </motion.div>
+                  ) : null}
+                  {dialogError ? (
+                    <motion.div
+                      animate={{ opacity: 1, y: 0 }}
+                      className="rounded-[16px] border border-[var(--danger)]/60 bg-[rgba(255,90,90,0.14)] px-4 py-3 text-sm text-white"
+                      initial={{ opacity: 0, y: -6 }}
+                    >
+                      {dialogError}
+                    </motion.div>
+                  ) : null}
+
                   <div className="max-w-3xl">
                     <p className="section-kicker">Exploration</p>
                     <h3 className="mt-3 font-[family:var(--font-display)] text-3xl text-white">
@@ -566,6 +627,11 @@ export function GameShell({ gameSessionId }: { gameSessionId: string }) {
 
                   <div className="panel-etched rounded-[22px] p-4">
                     <p className="section-kicker">Nearby NPCs</p>
+                    {dialogError ? (
+                      <p className="mt-2 text-xs text-[var(--danger)]">
+                        Dialogue launch failed. Try again.
+                      </p>
+                    ) : null}
                     <div className="mt-3 grid gap-3 md:grid-cols-2">
                       {session.world_snapshot.npcs_nearby.length ? (
                         session.world_snapshot.npcs_nearby.map((npc) => (
@@ -597,6 +663,8 @@ export function GameShell({ gameSessionId }: { gameSessionId: string }) {
                 <SocialConsole
                   activeSocial={activeSocial}
                   busy={socialMutation.isPending}
+                  imagePath={socialImage}
+                  imagePending={Boolean(activeSocial) && !socialImage && sessionQuery.isFetching}
                   message={message}
                   onMessageChange={setMessage}
                   onSubmit={submitSocial}
@@ -797,12 +865,16 @@ export function GameShell({ gameSessionId }: { gameSessionId: string }) {
 function SocialConsole({
   activeSocial,
   busy,
+  imagePath,
+  imagePending,
   message,
   onMessageChange,
   onSubmit,
 }: {
   activeSocial: ActiveSocialSession;
   busy: boolean;
+  imagePath: string | null;
+  imagePending: boolean;
   message: string;
   onMessageChange: (value: string) => void;
   onSubmit: (socialSessionId: string) => void;
@@ -814,6 +886,20 @@ function SocialConsole({
         <h3 className="mt-2 font-[family:var(--font-display)] text-3xl text-white">
           {prettify(activeSocial.persona_id)}
         </h3>
+      </div>
+
+      <div className="overflow-hidden rounded-[22px] border border-white/8 bg-black/20">
+        {imagePath ? (
+          <img
+            alt={prettify(activeSocial.persona_id)}
+            className="h-56 w-full object-cover"
+            src={imagePath}
+          />
+        ) : (
+          <div className="flex h-56 items-center justify-center text-sm text-ui-muted">
+            {imagePending ? "Syncing scene image..." : "Scene image unavailable"}
+          </div>
+        )}
       </div>
 
       <div className="max-h-[48vh] space-y-3 overflow-y-auto pr-2">

@@ -64,6 +64,10 @@ DIALOGUE_GRAPHS: Dict[str, CompiledDialogueGraph] = {}
 
 # Async quest planner singleton — populated at startup
 QUEST_PLANNER: Optional[QuestPlanner] = None
+VISUAL_GEN_TIMEOUT_SECONDS = 8.0
+SOCIAL_REPLY_TIMEOUT_SECONDS = 6.0
+SOCIAL_NLU_TIMEOUT_SECONDS = 2.5
+SOCIAL_MESSAGE_REPLY_TIMEOUT_SECONDS = 8.0
 
 
 async def _startup_compile_domains() -> None:
@@ -789,6 +793,100 @@ async def _run_blocking(func, *args, **kwargs):
     return await loop.run_in_executor(None, functools.partial(func, *args, **kwargs))
 
 
+async def _run_blocking_with_timeout(timeout_seconds: float, func, *args, **kwargs):
+    """Run a blocking call with timeout.
+
+    Returns `(result, pending_task)`. On timeout, `result` is None and
+    `pending_task` can be awaited later for late-attach behavior.
+    """
+    loop = asyncio.get_running_loop()
+    pending_task = loop.run_in_executor(None, functools.partial(func, *args, **kwargs))
+    try:
+        result = await asyncio.wait_for(asyncio.shield(pending_task), timeout=timeout_seconds)
+        return result, None
+    except TimeoutError:
+        return None, pending_task
+
+
+def _latest_assistant_image(history: Any) -> Optional[str]:
+    if not isinstance(history, list):
+        return None
+    for entry in reversed(history):
+        if not isinstance(entry, dict):
+            continue
+        if str(entry.get("role")) != "assistant":
+            continue
+        image = entry.get("image")
+        if isinstance(image, str) and image.strip():
+            return image
+    return None
+
+
+async def _attach_social_image_late(
+    persona_id: str,
+    session_id: str,
+    image_task,
+    *,
+    source: str,
+) -> None:
+    try:
+        image_path = await image_task
+    except Exception as exc:
+        logger.warning(f"[{source}] Late scene image attach failed: {exc}")
+        return
+
+    if not image_path:
+        return
+
+    key = _session_key(persona_id, session_id)
+    social_session = await SESSION_STORE.get(key)
+    if not isinstance(social_session, dict):
+        return
+
+    social_session["image_path"] = image_path
+    history = social_session.get("history")
+    if isinstance(history, list):
+        for entry in reversed(history):
+            if not isinstance(entry, dict):
+                continue
+            if str(entry.get("role")) != "assistant":
+                continue
+            if entry.get("image"):
+                break
+            entry["image"] = image_path
+            break
+
+    await SESSION_STORE.set(key, social_session)
+    logger.info(f"[{source}] Late scene image attached for session {session_id}")
+
+
+async def _hydrate_active_social_from_source(session: Dict[str, Any]) -> None:
+    active_social = session.get("active_social_session")
+    if not isinstance(active_social, dict):
+        return
+    persona_id = active_social.get("persona_id")
+    social_session_id = active_social.get("social_session_id")
+    if not persona_id or not social_session_id:
+        return
+
+    source = await SESSION_STORE.get(_session_key(str(persona_id), str(social_session_id)))
+    if not isinstance(source, dict):
+        return
+
+    active_social["social_state"] = _client_social_state(
+        source,
+        str(social_session_id),
+        include_debug=False,
+    )
+    history = source.get("history")
+    if isinstance(history, list):
+        active_social["history"] = history
+
+    latest_image = source.get("image_path") or _latest_assistant_image(history)
+    if latest_image:
+        active_social["image_path"] = latest_image
+
+
 # === Endpoints ===
 @app.get("/health", response_model=HealthResponse)
 async def health():
@@ -825,12 +923,14 @@ async def create_game_session():
 @app.get("/game/sessions/{game_session_id}", response_model=GameSessionSnapshotResponse)
 async def get_game_session(game_session_id: str):
     session = await _get_game_session_or_404(game_session_id)
+    await _hydrate_active_social_from_source(session)
     return _game_session_snapshot_response(session, load_world_ent())
 
 
 @app.get("/game/sessions/{game_session_id}/world", response_model=GameSessionSnapshotResponse)
 async def get_game_world(game_session_id: str):
     session = await _get_game_session_or_404(game_session_id)
+    await _hydrate_active_social_from_source(session)
     return _game_session_snapshot_response(session, load_world_ent())
 
 
@@ -1439,11 +1539,24 @@ async def social_init(request: SocialInitRequest):
             except Exception:
                 quest_keys = []
 
-        reply_payload = await _run_blocking(
-            social_llm.generate_quest_intro, social_state, quest_keys, target_goal
+        reply_payload, late_reply_task = await _run_blocking_with_timeout(
+            SOCIAL_REPLY_TIMEOUT_SECONDS,
+            social_llm.generate_quest_intro,
+            social_state,
+            quest_keys,
+            target_goal,
         )
+        if reply_payload is None:
+            logger.warning("[social/init] Intro narrative timed out; returning fallback response")
+            reply_payload = {
+                "text": f"{request.persona_id} has established a communication channel.",
+                "scene_description": "",
+            }
+            # We don't late-attach text payloads for now; only image.
+            late_reply_task = None
 
         image_path = None
+        late_image_task = None
         try:
             persona_data = orchestrator.personas_data.get(request.persona_id, {})
             persona_name = persona_data.get("name", request.persona_id)
@@ -1454,7 +1567,8 @@ async def social_init(request: SocialInitRequest):
                 image_ref_path = str(Path("npc_engine/config/social_world/nodes/personas") / image_ref)
             loc_data = orchestrator.locations_data.get(current_location, {})
             loc_name = loc_data.get("name", current_location)
-            image_path = await _run_blocking(
+            image_path, late_image_task = await _run_blocking_with_timeout(
+                VISUAL_GEN_TIMEOUT_SECONDS,
                 VIS_GEN.generate_scene_visual,
                 reply_payload.get("scene_description", ""),
                 persona_name,
@@ -1463,15 +1577,28 @@ async def social_init(request: SocialInitRequest):
                 image_ref_path=image_ref_path,
                 location_ref_path=None,
             )
+        except TimeoutError:
+            logger.warning("[social/init] Scene visual generation timed out; returning response without image")
+            image_path = None
         except Exception:
             image_path = None
 
         history = [{"role": "assistant", "content": reply_payload, "image": image_path}] if reply_payload else []
         session_extras["history"] = history
+        session_extras["image_path"] = image_path
 
         # Persist: merge typed state back to dict for the session store
         full_session = {**state.to_dict(), **session_extras}
         await _save_session(request.persona_id, session_id, full_session)
+        if late_image_task is not None:
+            asyncio.create_task(
+                _attach_social_image_late(
+                    request.persona_id,
+                    session_id,
+                    late_image_task,
+                    source="social/init",
+                )
+            )
 
         response_state = _client_social_state(
             full_session, session_id, include_debug=request.debug
@@ -1554,10 +1681,18 @@ async def social_message(request: SocialMessageRequest):
             else:
                 logger.info(f"[social_message] Explicit action rejected (not valid or guard failed): {request.action}")
         if not chosen_action:
-            # Fallback to NLU
-            nlu_action = social_llm.get_social_intent(request.message, session, valid_moves)
+            # Fallback to NLU (bounded to keep API latency predictable)
+            nlu_action, _late_nlu_task = await _run_blocking_with_timeout(
+                SOCIAL_NLU_TIMEOUT_SECONDS,
+                social_llm.get_social_intent,
+                request.message,
+                session,
+                valid_moves,
+            )
             if nlu_action and nlu_action in valid_moves:
                 chosen_action = nlu_action
+            elif nlu_action is None:
+                logger.warning("[social/message] NLU timed out; using talk fallback")
 
         if chosen_action:
             if de and chosen_action in _move_map:
@@ -1577,12 +1712,19 @@ async def social_message(request: SocialMessageRequest):
             session['hint_level'] = min(int(session.get('hint_level', 0)) + 1, 3)
 
         # Narrative generation
-        payload = await _run_blocking(
+        payload, _late_narrative_task = await _run_blocking_with_timeout(
+            SOCIAL_MESSAGE_REPLY_TIMEOUT_SECONDS,
             social_llm.generate_social_narrative,
             chosen_action or "talk",
             session,
             request.message,
         )
+        if payload is None:
+            logger.warning("[social/message] Narrative generation timed out; returning fallback reply")
+            payload = {
+                "reply": "Signal acknowledged. Response channel remains unstable.",
+                "scene_description": "",
+            }
 
         _maybe_update_target_goal(session)
 
@@ -1598,6 +1740,7 @@ async def social_message(request: SocialMessageRequest):
             session.setdefault("available_moves", [])
 
         image_path = None
+        late_image_task = None
         try:
             persona_data = orchestrator.personas_data.get(persona_id, {})
             persona_name = persona_data.get("name", persona_id)
@@ -1616,20 +1759,33 @@ async def social_message(request: SocialMessageRequest):
             scene_desc = payload.get("scene_description", "") if isinstance(payload, dict) else ""
             if not scene_desc:
                 scene_desc = f"{persona_name} responds in {loc_name}."
-            image_path = await _run_blocking(
-                VIS_GEN.generate_scene_visual,
-                scene_desc,
-                persona_name,
-                persona_desc,
-                loc_name,
-                image_ref_path=image_ref_path,
-                location_ref_path=location_ref_path,
+            late_image_task = asyncio.get_running_loop().run_in_executor(
+                None,
+                functools.partial(
+                    VIS_GEN.generate_scene_visual,
+                    scene_desc,
+                    persona_name,
+                    persona_desc,
+                    loc_name,
+                    image_ref_path=image_ref_path,
+                    location_ref_path=location_ref_path,
+                ),
             )
         except Exception:
             image_path = None
 
         session.setdefault("history", []).append({"role": "assistant", "content": payload, "image": image_path})
+        session["image_path"] = image_path
         await _save_session(persona_id, session_id, session)
+        if late_image_task is not None:
+            asyncio.create_task(
+                _attach_social_image_late(
+                    persona_id,
+                    session_id or "default",
+                    late_image_task,
+                    source="social/message",
+                )
+            )
 
         response_state = _client_social_state(
             session,
