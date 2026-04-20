@@ -42,6 +42,8 @@ class PlanCacheKey:
     player_id: str
     goal: str
     oracle_mode: bool
+    current_location: str = ""
+    inventory_signature: tuple[tuple[str, int], ...] = dataclasses.field(default_factory=tuple)
 
 
 @dataclasses.dataclass
@@ -137,6 +139,8 @@ class QuestPlanner:
             player_id=player.player_id,
             goal=goal,
             oracle_mode=oracle_mode,
+            current_location=getattr(player, "current_location", "") or "",
+            inventory_signature=self._inventory_signature(player),
         )
         cached = self._cache.get(key)
         if cached is not None:
@@ -215,6 +219,21 @@ class QuestPlanner:
         except Exception as exc:
             logger.error("QuestPlanner._solve_sync error: %s", exc, exc_info=True)
             return QuestPlan(steps=[], quest_steps=[], error=str(exc), goal=goal)
+
+    def _inventory_signature(self, player: "PlayerState") -> tuple[tuple[str, int], ...]:
+        inventory = getattr(player, "inventory", None)
+        if inventory is None:
+            return tuple()
+        items = getattr(inventory, "items", {})
+        if not isinstance(items, dict):
+            return tuple()
+        normalized = []
+        for item_id, count in items.items():
+            try:
+                normalized.append((str(item_id), int(count)))
+            except Exception:
+                normalized.append((str(item_id), 0))
+        return tuple(sorted(normalized))
 
     def _assess_sync(
         self,

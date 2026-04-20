@@ -3,7 +3,8 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 
 import {
   acceptQuest,
@@ -23,6 +24,8 @@ import type {
   WorldNpc,
 } from "@/lib/types";
 import { useGameUiStore } from "@/stores/game-ui";
+
+const STORAGE_KEY = "daqs:last-game-session";
 
 function prettify(value: string) {
   return value.replaceAll("_", " ").replace(/\b\w/g, (char) => char.toUpperCase());
@@ -66,7 +69,9 @@ function formatTimestamp(value?: string | null) {
 }
 
 export function GameShell({ gameSessionId }: { gameSessionId: string }) {
+  const router = useRouter();
   const queryClient = useQueryClient();
+  const recoveryTriggeredRef = useRef(false);
   const [message, setMessage] = useState("");
   const journalOpen = useGameUiStore((state) => state.journalOpen);
   const previewOpen = useGameUiStore((state) => state.previewOpen);
@@ -162,6 +167,20 @@ export function GameShell({ gameSessionId }: { gameSessionId: string }) {
   const session = sessionQuery.data;
   const activeSocial = session?.active_social_session ?? null;
   const locationImage = assetUrl(session?.world_snapshot.image_path ?? null);
+
+  useEffect(() => {
+    const error = sessionQuery.error as Error | null;
+    if (!error || recoveryTriggeredRef.current) {
+      return;
+    }
+    if (error.message !== "Game session not found") {
+      return;
+    }
+    recoveryTriggeredRef.current = true;
+    window.localStorage.removeItem(STORAGE_KEY);
+    router.replace("/play");
+  }, [sessionQuery.error, router]);
+
   if (sessionQuery.isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center px-6">
@@ -200,6 +219,7 @@ export function GameShell({ gameSessionId }: { gameSessionId: string }) {
     acceptMutation.isPending ||
     exitSocialMutation.isPending;
   const inventory = Object.entries(session.player_snapshot.inventory.items ?? {});
+  const activeRoute = session.active_quest?.plan ?? [];
 
   const submitSocial = (socialSessionId: string) => {
     const text = message.trim();
@@ -227,6 +247,32 @@ export function GameShell({ gameSessionId }: { gameSessionId: string }) {
               {session.active_quest?.name ??
                 (session.player_snapshot.goal ? prettify(session.player_snapshot.goal) : "No active quest accepted")}
             </p>
+          </div>
+
+          <div className="mt-6 rounded-[22px] border border-white/8 bg-white/3 p-4">
+            <p className="section-kicker">Current Route</p>
+            {session.active_quest ? (
+              activeRoute.length ? (
+                <ol className="mt-3 space-y-2 text-xs leading-6 text-ui-muted">
+                  {activeRoute.map((step, index) => (
+                    <li key={step + index}>
+                      <span className="mr-2 font-[family:var(--font-mono)] text-[var(--accent)]">
+                        {index + 1}.
+                      </span>
+                      {step}
+                    </li>
+                  ))}
+                </ol>
+              ) : (
+                <p className="mt-2 text-sm text-ui-muted">
+                  Route unavailable. Planner could not build a valid path for the current world state.
+                </p>
+              )
+            ) : (
+              <p className="mt-2 text-sm text-ui-muted">
+                Accept a quest to see a live tactical route.
+              </p>
+            )}
           </div>
 
           <div className="mt-6">

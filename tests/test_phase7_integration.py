@@ -387,6 +387,8 @@ def test_7_4_quest_accept_cached_latency():
         player_id="player_001",
         goal="(in-context player ctx_core)",
         oracle_mode=True,
+        current_location="forest_entrance",
+        inventory_signature=(),
     )
     planner._cache.set(cache_key, cached_plan)
 
@@ -612,7 +614,16 @@ def test_7_10_quest_journal_persists_in_session_snapshot():
     from npc_engine.main_fast_ent import GameQuestRequest, WorldMoveRequest
 
     original_game_store = app_module.GAME_SESSION_STORE
+    original_planner = app_module.QUEST_PLANNER
     app_module.GAME_SESSION_STORE = SessionStore(ttl_seconds=60)
+    planner_mock = MagicMock()
+    planner_mock.plan_quest = AsyncMock(return_value=QuestPlan(
+        steps=["(move forest_clearing hidden_grove)", "(pickup cpt_heat_potion)"],
+        quest_steps=[{"step": 1, "desc": "Move to hidden grove"}, {"step": 2, "desc": "Pick up potion"}],
+        error=None,
+        goal="(has-item player_001 cpt_heat_potion)",
+    ))
+    app_module.QUEST_PLANNER = planner_mock
 
     try:
         created = run(app_module.create_game_session())
@@ -655,12 +666,20 @@ def test_7_10_quest_journal_persists_in_session_snapshot():
 
         persisted = run(app_module.get_game_session(created.game_session_id))
         history_types = {event["type"] for event in persisted.quest_journal["history"]}
-        assert {"previewed", "accepted", "travel"} <= history_types
+        assert {"previewed", "accepted", "travel", "replanned"} <= history_types
         assert persisted.quest_journal["entries"][0]["status"] == "active"
-        assert persisted.quest_journal["entries"][0]["plan"] == mock_preview.plan
+        assert persisted.quest_journal["entries"][0]["plan"] == [
+            "(move forest_clearing hidden_grove)",
+            "(pickup cpt_heat_potion)",
+        ]
+        assert persisted.active_quest["plan"] == [
+            "(move forest_clearing hidden_grove)",
+            "(pickup cpt_heat_potion)",
+        ]
         assert moved.quest_journal == persisted.quest_journal
     finally:
         app_module.GAME_SESSION_STORE = original_game_store
+        app_module.QUEST_PLANNER = original_planner
 
 
 def test_7_11_http_smoke_multi_session_isolation():
@@ -736,3 +755,59 @@ def test_7_11_http_smoke_multi_session_isolation():
         app_module.DIALOGUE_GRAPHS = original_graphs
         app_module.SESSION_STORE = original_social_store
         app_module.GAME_SESSION_STORE = original_game_store
+
+
+def test_7_12_replan_failure_keeps_action_and_clears_plan():
+    import npc_engine.main_fast_ent as app_module
+    from npc_engine.main_fast_ent import GameQuestRequest, WorldMoveRequest
+
+    original_game_store = app_module.GAME_SESSION_STORE
+    original_planner = app_module.QUEST_PLANNER
+    app_module.GAME_SESSION_STORE = SessionStore(ttl_seconds=60)
+    planner_mock = MagicMock()
+    planner_mock.plan_quest = AsyncMock(return_value=QuestPlan(
+        steps=[],
+        quest_steps=[],
+        error="planner failed to find route",
+        goal="(has-item player_001 cpt_heat_potion)",
+    ))
+    app_module.QUEST_PLANNER = planner_mock
+
+    try:
+        created = run(app_module.create_game_session())
+        restored = run(app_module.get_game_session(created.game_session_id))
+        quest = restored.world_snapshot["available_quests"][0]
+        mock_preview = app_module.QuestAcceptResponse(
+            status="success",
+            plan=["(move forest_entrance forest_clearing)", "(pickup forest_herbs)"],
+            quest=[{"step": 1, "desc": "Reach the clearing"}, {"step": 2, "desc": "Collect herbs"}],
+            payload={"mission": "Collect herbs from the clearing."},
+        )
+
+        with patch.object(app_module, "quest_accept", AsyncMock(return_value=mock_preview)):
+            accepted = run(app_module.accept_game_quest(
+                created.game_session_id,
+                GameQuestRequest(
+                    quest_goal=quest["goal"],
+                    quest_name=quest["name"],
+                    oracle_mode=True,
+                ),
+            ))
+            assert accepted.active_quest is not None
+
+            moved = run(app_module.move_game_world(
+                created.game_session_id,
+                WorldMoveRequest(target_location_id="forest_clearing"),
+            ))
+
+        assert moved.player_snapshot["location"] == "forest_clearing"
+        assert moved.active_quest["plan"] == []
+        assert moved.active_quest["quest_steps"] == []
+        history_types = [event["type"] for event in moved.quest_journal["history"]]
+        assert "travel" in history_types
+        assert "replan-failed" in history_types
+        assert moved.quest_journal["entries"][0]["plan"] == []
+        assert moved.quest_journal["entries"][0]["status"] == "active"
+    finally:
+        app_module.GAME_SESSION_STORE = original_game_store
+        app_module.QUEST_PLANNER = original_planner

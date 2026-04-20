@@ -648,6 +648,94 @@ async def _save_game_session(game_session_id: str, session: Dict[str, Any]) -> N
     await GAME_SESSION_STORE.set(game_session_id, session)
 
 
+async def _replan_active_quest_route(
+    session: Dict[str, Any],
+    world: WorldGraph,
+    *,
+    reason: str,
+) -> None:
+    active_quest = session.get("active_quest")
+    if not isinstance(active_quest, dict):
+        return
+
+    quest_goal = str(active_quest.get("goal") or "").strip()
+    quest_name = str(active_quest.get("name") or "Active Quest").strip() or "Active Quest"
+    if not quest_goal:
+        return
+
+    player, _ = _load_game_player(session)
+    plan: List[str] = []
+    quest_steps: List[Dict[str, Any]] = []
+    error: Optional[str] = None
+    success = False
+
+    try:
+        if QUEST_PLANNER:
+            replanned = await QUEST_PLANNER.plan_quest(player, quest_goal, oracle_mode=True)
+            plan = list(replanned.steps or [])
+            quest_steps = list(replanned.quest_steps or [])
+            error = replanned.error
+            success = replanned.error is None
+        else:
+            replanned_plan, replanned_steps, replanned_error = generate_plan_and_quest(
+                world, player, quest_goal, True
+            )
+            plan = list(replanned_plan or [])
+            quest_steps = list(replanned_steps or [])
+            error = replanned_error
+            success = replanned_plan is not None
+    except Exception as exc:
+        error = str(exc)
+
+    if success:
+        active_quest["plan"] = plan
+        active_quest["quest_steps"] = quest_steps
+        _upsert_quest_journal_entry(
+            session,
+            quest_goal=quest_goal,
+            quest_name=quest_name,
+            status="active",
+            plan=plan,
+            quest_steps=quest_steps,
+            payload=active_quest.get("payload"),
+        )
+        _record_quest_history(
+            session,
+            event_type="replanned",
+            summary=f"Recomputed route after {reason}",
+            quest_goal=quest_goal,
+            quest_name=quest_name,
+            details={
+                "reason": reason,
+                "plan_length": len(plan),
+            },
+        )
+        return
+
+    active_quest["plan"] = []
+    active_quest["quest_steps"] = []
+    _upsert_quest_journal_entry(
+        session,
+        quest_goal=quest_goal,
+        quest_name=quest_name,
+        status="active",
+        plan=[],
+        quest_steps=[],
+        payload=active_quest.get("payload"),
+    )
+    _record_quest_history(
+        session,
+        event_type="replan-failed",
+        summary=f"Failed to recompute route after {reason}",
+        quest_goal=quest_goal,
+        quest_name=quest_name,
+        details={
+            "reason": reason,
+            "error": error or "Unknown planning error",
+        },
+    )
+
+
 # Explicit action guards for UI shortcuts (bypass NLU but keep sanity checks)
 MANUAL_ACTION_GUARDS = {
     "activate-trigger player ctx_neutral_talk trig_find_coin cpt_shadow_token": (
@@ -761,6 +849,11 @@ async def move_game_world(game_session_id: str, request: WorldMoveRequest):
             quest_name=session["active_quest"].get("name"),
             details={"location_id": request.target_location_id},
         )
+        await _replan_active_quest_route(
+            session,
+            world,
+            reason="move",
+        )
     session["ui_context"] = {"mode": "world"}
     await _save_game_session(game_session_id, session)
     return _game_session_snapshot_response(session, world)
@@ -787,6 +880,11 @@ async def pickup_game_item(game_session_id: str, request: WorldPickupRequest):
             quest_goal=session["active_quest"].get("goal"),
             quest_name=session["active_quest"].get("name"),
             details={"item_id": request.item_id, "location_id": player.current_location},
+        )
+        await _replan_active_quest_route(
+            session,
+            world,
+            reason="pickup",
         )
     session["ui_context"] = {"mode": "world"}
     await _save_game_session(game_session_id, session)

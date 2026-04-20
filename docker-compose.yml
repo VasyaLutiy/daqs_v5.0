@@ -13,6 +13,7 @@ services:
       - .env          # GEMINI_API_KEY, GEMINI_MODEL, LLM_PROVIDER, ...
     environment:
       - NPC_API_BASE=http://localhost:8001
+      - FRONTEND_ORIGINS=${FRONTEND_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
       - PYTHONUNBUFFERED=1
     volumes:
       # Persist player save state between restarts

@@ -81,6 +81,7 @@ LLM_PROVIDER=gemini
 GEMINI_API_KEY=your_real_key
 GEMINI_MODEL=gemini-3-flash-preview
 NEXT_PUBLIC_API_BASE=http://YOUR_VPS_PUBLIC_IP:8001
+FRONTEND_ORIGINS=http://YOUR_VPS_PUBLIC_IP:3000
 ```
 
 If you deploy behind domains instead of raw IPs:
@@ -93,6 +94,7 @@ Important:
 
 - `NEXT_PUBLIC_API_BASE` is baked into the React build.
 - If you change it later, rebuild `daqs_web` with `docker compose up -d --build daqs_web`.
+- `FRONTEND_ORIGINS` must include the exact browser origin of your frontend (scheme + host + port), otherwise FastAPI will block preflight with CORS error.
 
 ## 5. Build and start the stack
 
