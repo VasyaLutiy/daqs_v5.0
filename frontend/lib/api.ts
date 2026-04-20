@@ -66,10 +66,17 @@ export function assetUrl(path?: string | null): string | null {
   if (!path) {
     return null;
   }
+  // Backend may return absolute filesystem paths (e.g. /home/.../static/images/...).
+  // Normalize those to public static URL paths.
+  const normalized = path.replace(/\\/g, "/");
+  const staticMarkerIndex = normalized.indexOf("/static/");
+  if (staticMarkerIndex >= 0) {
+    return `${API_BASE}${normalized.slice(staticMarkerIndex)}`;
+  }
   if (/^https?:\/\//.test(path)) {
     return path;
   }
-  return `${API_BASE}${path.startsWith("/") ? path : `/${path}`}`;
+  return `${API_BASE}${normalized.startsWith("/") ? normalized : `/${normalized}`}`;
 }
 
 export async function createGameSession(): Promise<GameSessionCreateResponse> {
@@ -99,6 +106,29 @@ export async function pickupGameItem(
   return apiPost<GameSessionSnapshotResponse>(
     `/game/sessions/${gameSessionId}/world/pickup`,
     { item_id: itemId },
+  );
+}
+
+export async function teleportGameWorld(
+  gameSessionId: string,
+  portalId: string,
+  targetLocationId?: string,
+): Promise<GameSessionSnapshotResponse> {
+  return apiPost<GameSessionSnapshotResponse>(
+    `/game/sessions/${gameSessionId}/world/teleport`,
+    {
+      portal_id: portalId,
+      target_location_id: targetLocationId,
+    },
+  );
+}
+
+export async function generateWorldImage(
+  locationId: string,
+): Promise<{ image_path?: string | null }> {
+  return apiPost<{ image_path?: string | null }>(
+    "/world/image",
+    { location_id: locationId },
   );
 }
 

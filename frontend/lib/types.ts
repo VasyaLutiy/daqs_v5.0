@@ -49,6 +49,16 @@ export interface WorldItem {
   is_goal_item?: boolean;
 }
 
+export interface WorldPortal {
+  id: string;
+  name: string;
+  target_location_id: string;
+  target_location_name: string;
+  requires_item?: string | null;
+  is_available: boolean;
+  blocked_reason?: string | null;
+}
+
 export interface AvailableQuest {
   id: string;
   name: string;
@@ -59,6 +69,7 @@ export interface WorldSnapshot {
   location: WorldLocation;
   npcs_nearby: WorldNpc[];
   exits: WorldExit[];
+  portals_nearby?: WorldPortal[];
   items_nearby: WorldItem[];
   available_quests: AvailableQuest[];
   image_path?: string | null;

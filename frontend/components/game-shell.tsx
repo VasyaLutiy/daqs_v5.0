@@ -10,12 +10,14 @@ import {
   acceptQuest,
   assetUrl,
   exitSocial,
+  generateWorldImage,
   getGameSession,
   initSocial,
   moveGameWorld,
   pickupGameItem,
   previewQuest,
   sendSocialMessage,
+  teleportGameWorld,
 } from "@/lib/api";
 import type {
   ActiveSocialSession,
@@ -72,7 +74,9 @@ export function GameShell({ gameSessionId }: { gameSessionId: string }) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const recoveryTriggeredRef = useRef(false);
+  const routeDoneTimerRef = useRef<number | null>(null);
   const [message, setMessage] = useState("");
+  const [recentlyCompletedStep, setRecentlyCompletedStep] = useState<string | null>(null);
   const journalOpen = useGameUiStore((state) => state.journalOpen);
   const previewOpen = useGameUiStore((state) => state.previewOpen);
   const questPreview = useGameUiStore((state) => state.questPreview);
@@ -86,6 +90,25 @@ export function GameShell({ gameSessionId }: { gameSessionId: string }) {
   });
 
   const syncSnapshot = (snapshot: GameSessionSnapshotResponse) => {
+    const previous = queryClient.getQueryData<GameSessionSnapshotResponse>(queryKey(gameSessionId));
+    const previousRoute = previous?.active_quest?.plan ?? [];
+    const nextRoute = snapshot.active_quest?.plan ?? [];
+    const linearProgressed =
+      previousRoute.length > 0 &&
+      nextRoute.length + 1 === previousRoute.length &&
+      previousRoute.slice(1).every((step, index) => step === nextRoute[index]);
+
+    if (linearProgressed) {
+      const completed = previousRoute[0];
+      setRecentlyCompletedStep(completed);
+      if (routeDoneTimerRef.current !== null) {
+        window.clearTimeout(routeDoneTimerRef.current);
+      }
+      routeDoneTimerRef.current = window.setTimeout(() => {
+        setRecentlyCompletedStep((current) => (current === completed ? null : current));
+      }, 1800);
+    }
+
     queryClient.setQueryData(queryKey(gameSessionId), snapshot);
   };
 
@@ -97,6 +120,17 @@ export function GameShell({ gameSessionId }: { gameSessionId: string }) {
 
   const pickupMutation = useMutation({
     mutationFn: (itemId: string) => pickupGameItem(gameSessionId, itemId),
+    onSuccess: syncSnapshot,
+  });
+
+  const teleportMutation = useMutation({
+    mutationFn: ({
+      portalId,
+      targetLocationId,
+    }: {
+      portalId: string;
+      targetLocationId?: string;
+    }) => teleportGameWorld(gameSessionId, portalId, targetLocationId),
     onSuccess: syncSnapshot,
   });
 
@@ -166,7 +200,15 @@ export function GameShell({ gameSessionId }: { gameSessionId: string }) {
 
   const session = sessionQuery.data;
   const activeSocial = session?.active_social_session ?? null;
-  const locationImage = assetUrl(session?.world_snapshot.image_path ?? null);
+  const activeRoute = session?.active_quest?.plan ?? [];
+  const currentLocationId = session?.world_snapshot.location.id ?? null;
+  const imageQuery = useQuery({
+    queryKey: ["world-image", currentLocationId],
+    queryFn: () => generateWorldImage(currentLocationId || ""),
+    enabled: Boolean(currentLocationId) && !activeSocial,
+    staleTime: 0,
+    refetchOnWindowFocus: false,
+  });
 
   useEffect(() => {
     const error = sessionQuery.error as Error | null;
@@ -180,6 +222,12 @@ export function GameShell({ gameSessionId }: { gameSessionId: string }) {
     window.localStorage.removeItem(STORAGE_KEY);
     router.replace("/play");
   }, [sessionQuery.error, router]);
+
+  useEffect(() => () => {
+    if (routeDoneTimerRef.current !== null) {
+      window.clearTimeout(routeDoneTimerRef.current);
+    }
+  }, []);
 
   if (sessionQuery.isLoading) {
     return (
@@ -214,12 +262,19 @@ export function GameShell({ gameSessionId }: { gameSessionId: string }) {
   const actionBusy =
     moveMutation.isPending ||
     pickupMutation.isPending ||
+    teleportMutation.isPending ||
     talkMutation.isPending ||
     socialMutation.isPending ||
     acceptMutation.isPending ||
     exitSocialMutation.isPending;
   const inventory = Object.entries(session.player_snapshot.inventory.items ?? {});
-  const activeRoute = session.active_quest?.plan ?? [];
+  const resolvedImagePath = assetUrl(
+    imageQuery.data?.image_path ?? session.world_snapshot.image_path ?? null,
+  );
+  const renderImageSrc =
+    resolvedImagePath && !activeSocial
+      ? `${resolvedImagePath}${resolvedImagePath.includes("?") ? "&" : "?"}v=${imageQuery.dataUpdatedAt || 0}`
+      : null;
 
   const submitSocial = (socialSessionId: string) => {
     const text = message.trim();
@@ -251,14 +306,32 @@ export function GameShell({ gameSessionId }: { gameSessionId: string }) {
 
           <div className="mt-6 rounded-[22px] border border-white/8 bg-white/3 p-4">
             <p className="section-kicker">Current Route</p>
+            {recentlyCompletedStep ? (
+              <motion.div
+                animate={{ opacity: 1, y: 0 }}
+                className="mt-3 rounded-[14px] border border-[var(--line-strong)] bg-[rgba(235,185,97,0.1)] px-3 py-2 text-xs text-white"
+                initial={{ opacity: 0, y: -6 }}
+              >
+                <span className="mr-2 text-[var(--accent)]">Done</span>
+                {recentlyCompletedStep}
+              </motion.div>
+            ) : null}
             {session.active_quest ? (
               activeRoute.length ? (
                 <ol className="mt-3 space-y-2 text-xs leading-6 text-ui-muted">
                   {activeRoute.map((step, index) => (
-                    <li key={step + index}>
+                    <li
+                      key={step + index}
+                      className={
+                        index === 0
+                          ? "rounded-[12px] border border-[var(--line)] bg-[rgba(110,208,220,0.1)] px-2 py-1 text-white"
+                          : ""
+                      }
+                    >
                       <span className="mr-2 font-[family:var(--font-mono)] text-[var(--accent)]">
                         {index + 1}.
                       </span>
+                      {index === 0 ? <span className="mr-2 text-[var(--accent)]">Now</span> : null}
                       {step}
                     </li>
                   ))}
@@ -354,32 +427,44 @@ export function GameShell({ gameSessionId }: { gameSessionId: string }) {
           <div className="grid gap-6 px-6 py-6">
             <motion.div
               animate={{ opacity: 1, y: 0 }}
-              className="relative overflow-hidden rounded-[28px] border border-white/8 bg-[radial-gradient(circle_at_top,rgba(110,208,220,0.14),transparent_40%),linear-gradient(180deg,rgba(14,18,28,0.95),rgba(8,10,14,0.98))] p-6"
+              className="overflow-hidden rounded-[28px] border border-white/8 bg-[radial-gradient(circle_at_top,rgba(110,208,220,0.14),transparent_40%),linear-gradient(180deg,rgba(14,18,28,0.95),rgba(8,10,14,0.98))] p-6"
               initial={{ opacity: 0, y: 10 }}
               transition={{ duration: 0.32 }}
             >
-              {locationImage && !activeSocial ? (
-                <img
-                  alt={session.world_snapshot.location.name}
-                  className="absolute inset-0 h-full w-full object-cover opacity-20"
-                  src={locationImage}
-                />
-              ) : null}
-              <div className="relative z-10">
-                {!activeSocial ? (
-                  <div className="space-y-6">
-                    <div className="max-w-3xl">
-                      <p className="section-kicker">Exploration</p>
-                      <h3 className="mt-3 font-[family:var(--font-display)] text-3xl text-white">
-                        {session.world_snapshot.location.name}
-                      </h3>
-                      <p className="mt-4 max-w-2xl text-base leading-8 text-ui-muted">
-                        {session.world_snapshot.location.description ||
-                          "The world state is available, but this location has no authored description."}
-                      </p>
-                    </div>
+              {!activeSocial ? (
+                <div className="space-y-6">
+                  <div className="max-w-3xl">
+                    <p className="section-kicker">Exploration</p>
+                    <h3 className="mt-3 font-[family:var(--font-display)] text-3xl text-white">
+                      {session.world_snapshot.location.name}
+                    </h3>
+                    <p className="mt-4 max-w-2xl text-base leading-8 text-ui-muted">
+                      {session.world_snapshot.location.description ||
+                        "The world state is available, but this location has no authored description."}
+                    </p>
+                  </div>
 
-                    <div className="grid gap-4 lg:grid-cols-2">
+                  <div className="overflow-hidden rounded-[22px] border border-white/8 bg-black/20">
+                    {renderImageSrc ? (
+                      <img
+                        alt={session.world_snapshot.location.name}
+                        className="h-[320px] w-full object-cover"
+                        src={renderImageSrc}
+                      />
+                    ) : (
+                      <div className="flex h-[320px] items-center justify-center text-sm text-ui-muted">
+                        Visual is being prepared for this location.
+                      </div>
+                    )}
+                    <div className="flex items-center justify-between border-t border-white/8 px-4 py-3 text-xs text-ui-muted">
+                      <span>Location visual</span>
+                      <span>
+                        {imageQuery.isPending || imageQuery.isFetching ? "Generating..." : "Ready"}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-4 lg:grid-cols-3">
                       <div className="panel-etched rounded-[22px] p-4">
                         <p className="section-kicker">Exits</p>
                         <div className="mt-3 flex flex-wrap gap-3">
@@ -397,6 +482,52 @@ export function GameShell({ gameSessionId }: { gameSessionId: string }) {
                             ))
                           ) : (
                             <p className="text-sm text-ui-muted">No traversable exits.</p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="panel-etched rounded-[22px] p-4">
+                        <p className="section-kicker">Portals</p>
+                        <div className="mt-3 space-y-3">
+                          {session.world_snapshot.portals_nearby?.length ? (
+                            session.world_snapshot.portals_nearby.map((portal) => (
+                              <div
+                                key={portal.id}
+                                className="flex items-center justify-between rounded-[16px] border border-white/6 bg-black/15 px-3 py-3"
+                              >
+                                <div>
+                                  <p className="text-sm text-white">{portal.name}</p>
+                                  <p className="text-xs text-ui-muted">
+                                    Destination: {portal.target_location_name}
+                                  </p>
+                                  {portal.requires_item ? (
+                                    <p className="text-xs text-ui-muted">
+                                      Key: {prettify(portal.requires_item)}
+                                    </p>
+                                  ) : null}
+                                  {!portal.is_available && portal.blocked_reason ? (
+                                    <p className="text-xs text-[var(--danger)]">
+                                      {portal.blocked_reason}
+                                    </p>
+                                  ) : null}
+                                </div>
+                                <button
+                                  className="btn-ghost rounded-full px-3 py-2 text-xs font-medium"
+                                  disabled={actionBusy || !portal.is_available}
+                                  onClick={() =>
+                                    teleportMutation.mutate({
+                                      portalId: portal.id,
+                                      targetLocationId: portal.target_location_id,
+                                    })
+                                  }
+                                  type="button"
+                                >
+                                  Teleport
+                                </button>
+                              </div>
+                            ))
+                          ) : (
+                            <p className="text-sm text-ui-muted">No portals in this location.</p>
                           )}
                         </div>
                       </div>
@@ -431,47 +562,46 @@ export function GameShell({ gameSessionId }: { gameSessionId: string }) {
                           )}
                         </div>
                       </div>
-                    </div>
+                  </div>
 
-                    <div className="panel-etched rounded-[22px] p-4">
-                      <p className="section-kicker">Nearby NPCs</p>
-                      <div className="mt-3 grid gap-3 md:grid-cols-2">
-                        {session.world_snapshot.npcs_nearby.length ? (
-                          session.world_snapshot.npcs_nearby.map((npc) => (
-                            <button
-                              key={npc.id}
-                              className="rounded-[18px] border border-white/8 bg-white/3 px-4 py-4 text-left transition hover:border-[var(--line-strong)] hover:bg-white/6"
-                              disabled={actionBusy}
-                              onClick={() => talkMutation.mutate(npc)}
-                              type="button"
-                            >
-                              <p className="font-[family:var(--font-display)] text-xl text-white">
-                                {npc.name}
-                              </p>
-                              <p className="mt-2 text-sm text-ui-muted">
-                                {npc.personality || npc.description || "No behavioral profile loaded."}
-                              </p>
-                              <p className="mt-3 section-kicker">
-                                {npc.dialogue_quest ? "Quest-bearing signal" : "Dialogue available"}
-                              </p>
-                            </button>
-                          ))
-                        ) : (
-                          <p className="text-sm text-ui-muted">No active NPC signatures at this location.</p>
-                        )}
-                      </div>
+                  <div className="panel-etched rounded-[22px] p-4">
+                    <p className="section-kicker">Nearby NPCs</p>
+                    <div className="mt-3 grid gap-3 md:grid-cols-2">
+                      {session.world_snapshot.npcs_nearby.length ? (
+                        session.world_snapshot.npcs_nearby.map((npc) => (
+                          <button
+                            key={npc.id}
+                            className="rounded-[18px] border border-white/8 bg-white/3 px-4 py-4 text-left transition hover:border-[var(--line-strong)] hover:bg-white/6"
+                            disabled={actionBusy}
+                            onClick={() => talkMutation.mutate(npc)}
+                            type="button"
+                          >
+                            <p className="font-[family:var(--font-display)] text-xl text-white">
+                              {npc.name}
+                            </p>
+                            <p className="mt-2 text-sm text-ui-muted">
+                              {npc.personality || npc.description || "No behavioral profile loaded."}
+                            </p>
+                            <p className="mt-3 section-kicker">
+                              {npc.dialogue_quest ? "Quest-bearing signal" : "Dialogue available"}
+                            </p>
+                          </button>
+                        ))
+                      ) : (
+                        <p className="text-sm text-ui-muted">No active NPC signatures at this location.</p>
+                      )}
                     </div>
                   </div>
-                ) : (
-                  <SocialConsole
-                    activeSocial={activeSocial}
-                    busy={socialMutation.isPending}
-                    message={message}
-                    onMessageChange={setMessage}
-                    onSubmit={submitSocial}
-                  />
-                )}
-              </div>
+                </div>
+              ) : (
+                <SocialConsole
+                  activeSocial={activeSocial}
+                  busy={socialMutation.isPending}
+                  message={message}
+                  onMessageChange={setMessage}
+                  onSubmit={submitSocial}
+                />
+              )}
             </motion.div>
           </div>
         </section>

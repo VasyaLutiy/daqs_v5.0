@@ -35,6 +35,7 @@ from npc_engine.fastapi_ent_libs import (
     load_player_from_json_data,
     serialize_player_state,
     collect_location_data,
+    collect_portal_data,
     collect_available_quests,
     build_world_snapshot,
     generate_plan_and_quest,
@@ -279,6 +280,11 @@ class WorldMoveRequest(BaseModel):
 
 class WorldPickupRequest(BaseModel):
     item_id: str
+
+
+class WorldTeleportRequest(BaseModel):
+    portal_id: str
+    target_location_id: Optional[str] = None
 
 
 class GameQuestRequest(BaseModel):
@@ -891,6 +897,50 @@ async def pickup_game_item(game_session_id: str, request: WorldPickupRequest):
     return _game_session_snapshot_response(session, world)
 
 
+@app.post("/game/sessions/{game_session_id}/world/teleport", response_model=GameSessionSnapshotResponse)
+async def teleport_game_world(game_session_id: str, request: WorldTeleportRequest):
+    session = await _get_game_session_or_404(game_session_id)
+    world = load_world_ent()
+    player, goal = _load_game_player(session)
+    snapshot = build_world_snapshot(world, player, goal)
+    portal_entries = {entry["id"]: entry for entry in snapshot.get("portals_nearby", [])}
+    portal_entry = portal_entries.get(request.portal_id)
+    if portal_entry is None:
+        raise HTTPException(status_code=404, detail="Portal is not available at the current location")
+    if request.target_location_id and request.target_location_id != portal_entry.get("target_location_id"):
+        raise HTTPException(status_code=409, detail="Portal target mismatch")
+    if not portal_entry.get("is_available", False):
+        blocked_reason = portal_entry.get("blocked_reason") or "Portal requirements are not satisfied"
+        raise HTTPException(status_code=409, detail=blocked_reason)
+
+    source_location = player.current_location
+    target_location_id = str(portal_entry["target_location_id"])
+    player.visit_location(target_location_id)
+    _persist_game_player(session, player, goal)
+    if session.get("active_quest"):
+        _record_quest_history(
+            session,
+            event_type="teleport",
+            summary=f"Teleported from {source_location} to {target_location_id}",
+            quest_goal=session["active_quest"].get("goal"),
+            quest_name=session["active_quest"].get("name"),
+            details={
+                "portal_id": request.portal_id,
+                "from": source_location,
+                "to": target_location_id,
+                "required_item": portal_entry.get("requires_item"),
+            },
+        )
+        await _replan_active_quest_route(
+            session,
+            world,
+            reason="teleport",
+        )
+    session["ui_context"] = {"mode": "world"}
+    await _save_game_session(game_session_id, session)
+    return _game_session_snapshot_response(session, world)
+
+
 @app.post("/game/sessions/{game_session_id}/quests/preview", response_model=GameQuestPreviewResponse)
 async def preview_game_quest(game_session_id: str, request: GameQuestRequest):
     session = await _get_game_session_or_404(game_session_id)
@@ -1092,6 +1142,7 @@ async def world_state(player_id: str = "player_001", location: str = "forest_ent
         # Minimal player init
         player = PlayerState(player_id=player_id, current_location=location)
         npcs, exits, items = collect_location_data(world, player.current_location, goal)
+        portals = collect_portal_data(world, player.current_location, player)
         available_quests = collect_available_quests(world, player)
 
         duration_ms = (datetime.now(timezone.utc) - start_ts).total_seconds() * 1000
@@ -1108,10 +1159,12 @@ async def world_state(player_id: str = "player_001", location: str = "forest_ent
                 "npcs_nearby": npcs,
                 "exits": exits,
                 "items_nearby": items,
+                "portals_nearby": portals,
             },
             "npcs_nearby": npcs,
             "exits": exits,
             "items_nearby": items,
+            "portals_nearby": portals,
             "duration_ms": duration_ms,
         }
     except Exception as e:

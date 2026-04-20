@@ -167,6 +167,52 @@ def collect_location_data(world: WorldGraph, location_id: str, goal: Optional[st
     return npcs_nearby, exits, items_nearby
 
 
+def collect_portal_data(
+    world: WorldGraph,
+    location_id: str,
+    player: Optional[PlayerState] = None,
+) -> List[Dict[str, Any]]:
+    """Collect portal interactions available from the current location."""
+    portals_nearby: List[Dict[str, Any]] = []
+    current_loc_node = world.get_node(location_id)
+    if not current_loc_node or not isinstance(current_loc_node, LocationNode):
+        return portals_nearby
+
+    for object_id in current_loc_node.contained_objects:
+        object_node = world.get_node(object_id)
+        if not object_node:
+            continue
+        props = getattr(object_node, "properties", {}) or {}
+        if not props.get("is_portal"):
+            continue
+
+        target_id = props.get("target_location")
+        if not target_id:
+            continue
+        target_node = world.get_node(target_id)
+        requires_item = props.get("requires_item")
+        has_required_item = True
+        blocked_reason = None
+        if requires_item:
+            has_required_item = bool(player and player.inventory.has_item(str(requires_item)))
+            if not has_required_item:
+                blocked_reason = f"missing_item:{requires_item}"
+
+        portals_nearby.append(
+            {
+                "id": object_id,
+                "name": getattr(object_node, "name", object_id),
+                "target_location_id": target_id,
+                "target_location_name": getattr(target_node, "name", target_id),
+                "requires_item": requires_item,
+                "is_available": has_required_item,
+                "blocked_reason": blocked_reason,
+            }
+        )
+
+    return portals_nearby
+
+
 def generate_plan_and_quest(world: WorldGraph, player: PlayerState, goal: Optional[str], oracle_mode: bool) -> Tuple[Optional[List[str]], List[Dict[str, Any]], str]:
     """Plan and build quest steps for a player/goal combination."""
     logger = logging_manager.get_component_logger("master")
@@ -239,6 +285,7 @@ def build_world_snapshot(
     npcs_nearby, exits, items_nearby = collect_location_data(
         target_world, player.current_location, goal
     )
+    portals_nearby = collect_portal_data(target_world, player.current_location, player)
     available_quests = collect_available_quests(target_world, player)
     location_node = target_world.get_node(player.current_location)
 
@@ -250,6 +297,7 @@ def build_world_snapshot(
         },
         "npcs_nearby": npcs_nearby,
         "exits": exits,
+        "portals_nearby": portals_nearby,
         "items_nearby": items_nearby,
         "available_quests": available_quests,
     }

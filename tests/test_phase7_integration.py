@@ -188,6 +188,7 @@ def test_7_1b_app_routes_registered():
         "/game/sessions/{game_session_id}/world",
         "/game/sessions/{game_session_id}/world/move",
         "/game/sessions/{game_session_id}/world/pickup",
+        "/game/sessions/{game_session_id}/world/teleport",
         "/game/sessions/{game_session_id}/quests/preview",
         "/game/sessions/{game_session_id}/quests/accept",
         "/game/sessions/{game_session_id}/social/init",
@@ -811,3 +812,129 @@ def test_7_12_replan_failure_keeps_action_and_clears_plan():
     finally:
         app_module.GAME_SESSION_STORE = original_game_store
         app_module.QUEST_PLANNER = original_planner
+
+
+def test_7_13_world_teleport_requires_item_and_updates_session():
+    import npc_engine.main_fast_ent as app_module
+    from fastapi import HTTPException
+    from npc_engine.main_fast_ent import WorldMoveRequest, WorldPickupRequest, WorldTeleportRequest
+
+    original_store = app_module.GAME_SESSION_STORE
+    app_module.GAME_SESSION_STORE = SessionStore(ttl_seconds=60)
+
+    try:
+        created = run(app_module.create_game_session())
+
+        # Reach anc_hidden_grove without summoning_rune first.
+        run(app_module.move_game_world(created.game_session_id, WorldMoveRequest(target_location_id="forest_clearing")))
+        run(app_module.move_game_world(created.game_session_id, WorldMoveRequest(target_location_id="dark_thicket")))
+        run(app_module.move_game_world(created.game_session_id, WorldMoveRequest(target_location_id="ancient_temple_entrance")))
+        run(app_module.move_game_world(created.game_session_id, WorldMoveRequest(target_location_id="temple_hall")))
+        run(app_module.move_game_world(created.game_session_id, WorldMoveRequest(target_location_id="temple_altar")))
+        run(app_module.move_game_world(created.game_session_id, WorldMoveRequest(target_location_id="anc_hidden_grove")))
+
+        with pytest.raises(HTTPException) as exc:
+            run(app_module.teleport_game_world(
+                created.game_session_id,
+                WorldTeleportRequest(portal_id="obj_fort_portal"),
+            ))
+        assert exc.value.status_code == 409
+
+        # Backtrack, pick rune, then teleport succeeds.
+        run(app_module.move_game_world(created.game_session_id, WorldMoveRequest(target_location_id="temple_altar")))
+        run(app_module.move_game_world(created.game_session_id, WorldMoveRequest(target_location_id="temple_hall")))
+        run(app_module.move_game_world(created.game_session_id, WorldMoveRequest(target_location_id="ancient_temple_entrance")))
+        run(app_module.move_game_world(created.game_session_id, WorldMoveRequest(target_location_id="dark_thicket")))
+        run(app_module.move_game_world(created.game_session_id, WorldMoveRequest(target_location_id="forest_clearing")))
+        run(app_module.move_game_world(created.game_session_id, WorldMoveRequest(target_location_id="hidden_grove")))
+        run(app_module.pickup_game_item(created.game_session_id, WorldPickupRequest(item_id="summoning_rune")))
+        run(app_module.move_game_world(created.game_session_id, WorldMoveRequest(target_location_id="forest_clearing")))
+        run(app_module.move_game_world(created.game_session_id, WorldMoveRequest(target_location_id="dark_thicket")))
+        run(app_module.move_game_world(created.game_session_id, WorldMoveRequest(target_location_id="ancient_temple_entrance")))
+        run(app_module.move_game_world(created.game_session_id, WorldMoveRequest(target_location_id="temple_hall")))
+        run(app_module.move_game_world(created.game_session_id, WorldMoveRequest(target_location_id="temple_altar")))
+        run(app_module.move_game_world(created.game_session_id, WorldMoveRequest(target_location_id="anc_hidden_grove")))
+
+        teleported = run(app_module.teleport_game_world(
+            created.game_session_id,
+            WorldTeleportRequest(portal_id="obj_fort_portal", target_location_id="loc_fort"),
+        ))
+        assert teleported.player_snapshot["location"] == "loc_fort"
+        history_types = [event["type"] for event in teleported.quest_journal["history"]]
+        if teleported.active_quest:
+            assert "teleport" in history_types
+    finally:
+        app_module.GAME_SESSION_STORE = original_store
+
+
+def test_7_14_http_smoke_teleport_multi_session_isolation():
+    import npc_engine.main_fast_ent as app_module
+
+    original_game_store = app_module.GAME_SESSION_STORE
+    app_module.GAME_SESSION_STORE = SessionStore(ttl_seconds=60)
+
+    try:
+        first_status, first = asgi_json_request(app_module.app, "POST", "/game/sessions")
+        second_status, second = asgi_json_request(app_module.app, "POST", "/game/sessions")
+        assert first_status == 200
+        assert second_status == 200
+
+        first_id = first["game_session_id"]
+        second_id = second["game_session_id"]
+
+        # Session A: fetch rune and reach portal location.
+        for target in [
+            "forest_clearing",
+            "hidden_grove",
+        ]:
+            move_status, _ = asgi_json_request(
+                app_module.app,
+                "POST",
+                f"/game/sessions/{first_id}/world/move",
+                {"target_location_id": target},
+            )
+            assert move_status == 200
+
+        pickup_status, _ = asgi_json_request(
+            app_module.app,
+            "POST",
+            f"/game/sessions/{first_id}/world/pickup",
+            {"item_id": "summoning_rune"},
+        )
+        assert pickup_status == 200
+
+        for target in [
+            "forest_clearing",
+            "dark_thicket",
+            "ancient_temple_entrance",
+            "temple_hall",
+            "temple_altar",
+            "anc_hidden_grove",
+        ]:
+            move_status, _ = asgi_json_request(
+                app_module.app,
+                "POST",
+                f"/game/sessions/{first_id}/world/move",
+                {"target_location_id": target},
+            )
+            assert move_status == 200
+
+        teleport_status, teleported = asgi_json_request(
+            app_module.app,
+            "POST",
+            f"/game/sessions/{first_id}/world/teleport",
+            {"portal_id": "obj_fort_portal", "target_location_id": "loc_fort"},
+        )
+        assert teleport_status == 200
+        assert teleported["player_snapshot"]["location"] == "loc_fort"
+
+        isolated_status, isolated_payload = asgi_json_request(
+            app_module.app,
+            "GET",
+            f"/game/sessions/{second_id}",
+        )
+        assert isolated_status == 200
+        assert isolated_payload["player_snapshot"]["location"] == "forest_entrance"
+        assert isolated_payload["player_snapshot"]["inventory"]["items"] == {}
+    finally:
+        app_module.GAME_SESSION_STORE = original_game_store
