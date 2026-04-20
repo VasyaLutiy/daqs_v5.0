@@ -12,6 +12,15 @@ locations:
         edge_type: path
         bidirectional: true
     contains:
+      objects:
+        - id: obj_paladin_return_portal
+          name: "Forgotten Realm Gate"
+          type: object
+          description: "An ancient gate that resonates with the Summoning Rune and leads back to the Paladin Realm."
+          properties:
+            is_portal: true
+            target_location: paladin_entrance
+            requires_item: summoning_rune
       items:
         - id: cpt_heat_potion # The first key
           name: "Fire Resistance Elixir"
