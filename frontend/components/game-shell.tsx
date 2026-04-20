@@ -250,6 +250,11 @@ export function GameShell({ gameSessionId }: { gameSessionId: string }) {
     enabled: Boolean(currentLocationId) && !activeSocial,
     staleTime: 0,
     refetchOnWindowFocus: false,
+    refetchInterval: (query) => {
+      const payload = query.state.data as { image_path?: string | null } | undefined;
+      const hasImage = Boolean(assetUrl(payload?.image_path ?? null));
+      return hasImage ? false : 2000;
+    },
   });
 
   useEffect(() => {
@@ -317,6 +322,13 @@ export function GameShell({ gameSessionId }: { gameSessionId: string }) {
     resolvedImagePath && !activeSocial
       ? `${resolvedImagePath}${resolvedImagePath.includes("?") ? "&" : "?"}v=${imageQuery.dataUpdatedAt || 0}`
       : null;
+  const worldVisualStatus = imageQuery.isPending || imageQuery.isFetching
+    ? "Generating..."
+    : renderImageSrc
+      ? "Ready"
+      : imageQuery.error
+        ? "Retrying..."
+        : "Preparing...";
 
   const submitSocial = (socialSessionId: string) => {
     const text = message.trim();
@@ -519,10 +531,13 @@ export function GameShell({ gameSessionId }: { gameSessionId: string }) {
                     )}
                     <div className="flex items-center justify-between border-t border-white/8 px-4 py-3 text-xs text-ui-muted">
                       <span>Location visual</span>
-                      <span>
-                        {imageQuery.isPending || imageQuery.isFetching ? "Generating..." : "Ready"}
-                      </span>
+                      <span>{worldVisualStatus}</span>
                     </div>
+                    {imageQuery.error && !renderImageSrc ? (
+                      <div className="border-t border-white/8 px-4 py-2 text-[11px] text-ui-muted">
+                        Renderer is still warming up; auto-retrying.
+                      </div>
+                    ) : null}
                   </div>
 
                   <div className="grid gap-4 lg:grid-cols-3">
